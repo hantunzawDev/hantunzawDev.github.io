@@ -477,7 +477,7 @@ async function loadFeed(src = feedSrc, force = false) {
   try {
     const { data, t, stale } = await fetchFeed(src, force);
     if (src !== feedSrc) return;
-    list.replaceChildren(...data.map((it) => h("li", {}, h("a", { href: it.url, target: "_blank", rel: "noopener" },
+    list.replaceChildren(...data.map((it) => h("li", {}, h("a", { href: safeUrl(it.url), target: "_blank", rel: "noopener" },
       h("div", {}, h("strong", { textContent: it.title }), h("span", { textContent: it.meta, title: it.meta }))))));
     $("#feed-meta").textContent = (stale ? "offline · " : "") + ago(t);
   } catch (err) {
@@ -588,7 +588,8 @@ const HELP = {
   games:  "snake · type · guess",
   system: "open|close|max <app> · ls · layout reset · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
 };
-const go = (url) => { location.href = url; };
+const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : "#"; } catch { return "#"; } }; // feed/calendar URLs are third-party data
+const go = (url) => { location.href = safeUrl(url); };
 const enc = encodeURIComponent;
 const fmtUptime = (ms) => { const m = Math.floor(ms / 6e4); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`; };
 
@@ -665,7 +666,7 @@ const COMMANDS = {
       const j = await getJSON(`https://en.wikipedia.org/api/rest_v1/page/summary/${enc(a.replace(/ /g, "_"))}`);
       log(j.title, "ok");
       log(j.extract.length > 420 ? j.extract.slice(0, 420) + "…" : j.extract);
-      if (j.content_urls?.desktop?.page) log(h("a", { href: j.content_urls.desktop.page, target: "_blank", rel: "noopener", textContent: "→ read on wikipedia" }));
+      if (j.content_urls?.desktop?.page) log(h("a", { href: safeUrl(j.content_urls.desktop.page), target: "_blank", rel: "noopener", textContent: "→ read on wikipedia" }));
     } catch { log(`wiki: nothing found for "${a}".`, "err"); }
   },
   date: () => log(new Date().toString()),

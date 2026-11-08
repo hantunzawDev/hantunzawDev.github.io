@@ -374,4 +374,11 @@ async function start() {
   else entry(null, `Welcome. I'm Han, and this is my terminal. Try ${run("about")}, ${run("work")} or ${run("projects")}, or type ${run("help")}.`, { scroll: false });
   if (matchMedia("(pointer: fine)").matches) input.focus({ preventScroll: true });
 }
+
+// for the curious who open devtools: say hi instead of blocking them
+(() => {
+  const acc = getComputedStyle(document.documentElement).getPropertyValue("--acc").trim() || "#b6f36a";
+  console.log(`%chzOS%c  you found the console. 👋`, `font: 700 20px ui-monospace, monospace; color: ${acc}`, "font: 13px ui-monospace, monospace");
+  console.log("%cCurious how it's built? Ask me instead of copying it:\n  github   https://github.com/hantunzawDev\n  linkedin https://www.linkedin.com/in/hantunzaw/\nFound a bug or a security issue? Type `contact` in the terminal.", "font: 12px ui-monospace, monospace; line-height: 1.6");
+})();
 start();

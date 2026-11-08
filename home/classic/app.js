@@ -140,6 +140,8 @@ function renderQuote(random = false) {
   } else run();
 }
 
+const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : "#"; } catch { return "#"; } }; // feed/calendar URLs are third-party data
+
 /* ---------------- quick links ---------------- */
 function renderLinks() {
   const nav = $("#links");
@@ -410,7 +412,7 @@ async function loadNews(src = activeSrc, force = false) {
     const { data, t, stale } = await cached("news." + src, NEWS[src].ttl, () => NEWS[src].load(), force);
     if (src !== activeSrc) return;
     list.replaceChildren(...data.map((it) =>
-      el("li", {}, el("a", { href: it.url, target: "_blank", rel: "noopener" },
+      el("li", {}, el("a", { href: safeUrl(it.url), target: "_blank", rel: "noopener" },
         el("div", {}, el("strong", { textContent: it.title }), el("span", { textContent: it.meta, title: it.meta }))))));
     $("#news-meta").textContent = (stale ? "offline · " : "") + ago(t);
   } catch (err) {
@@ -502,7 +504,7 @@ function renderAgenda() {
     const time = ev.allDay
       ? el("span", { className: "t", textContent: "all day" })
       : el("span", { className: "t" }, fmtTime(ev.s).replace(/\s?[AP]M$/i, ""), el("small", { textContent: fmtTime(ev.e) }));
-    const title = ev.url ? el("a", { href: ev.url, target: "_blank", rel: "noopener", textContent: ev.title }) : ev.title;
+    const title = ev.url ? el("a", { href: safeUrl(ev.url), target: "_blank", rel: "noopener", textContent: ev.title }) : ev.title;
     const li = el("li", {}, time, el("div", { className: "what" }, el("strong", {}, title), ev.where ? el("span", { textContent: ev.where }) : null));
     li._ev = ev;
     return li;

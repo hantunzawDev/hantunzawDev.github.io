@@ -2,11 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; base-uri 'none'; form-action https://www.google.com; upgrade-insecure-requests; font-src https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' https://cdn.jsdelivr.net 'sha256-/kJdCJE9/FGAJhxgxLbcRDp3dvUVtzFCIeh8b/9RDJA='; img-src 'self' data: https://www.google.com https://*.gstatic.com; connect-src 'self' https:">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Home · hantunzaw</title>
   <meta name="description" content="Han's personal browser home: time, weather, today's agenda, focus timer and news.">
   <meta name="theme-color" content="#07080a">
-  <meta name="robots" content="noindex">
+  <meta name="robots" content="noindex, nofollow, noai, noimageai">
   <link rel="icon" href="../../assets/favicon.ico">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,7 +23,8 @@
     - 3D: three.js (MIT). Motion: GSAP (standard no-charge license)
   -->
   <script type="importmap">
-    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" },
+      "integrity": { "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js": "sha384-61S/Nu32S3E5+n+KpCOTb2eRYps6fVKm+9Gz1QBvSePFthb46f063Aa/qe/lykFZ" } }
   </script>
 </head>
 <body data-phase="night">
@@ -192,8 +195,8 @@
 
   <noscript><p class="noscript">This home page needs JavaScript for the clock, weather and news.</p></noscript>
 
-  <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js" integrity="sha384-GPb5RlngihS9H0z1D137JsvzmeZ7tCpWEF4t5YDoTZyMsPP8S7h7vFDh4XhheU83" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js" integrity="sha384-g4NTh/Iv5PPU4xPyhEWqPcwtNXOvdaDI8LLnyYfyNZOjKJeYQyjzQ9X5275eBjpt" crossorigin="anonymous"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
