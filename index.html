@@ -1,18 +1,104 @@
-<html>
-
+<!doctype html>
+<html lang="en">
 <head>
-  <link rel="shortcut icon" type="image/x-icon" href="assets/favicon.ico">
-  <title>echo!</title>
-  <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
-  <link rel="stylesheet" type="text/css" href="assets/css/index.css">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Han Tun Zaw · Senior Flutter Developer</title>
+  <meta name="description" content="Han Tun Zaw, Senior Flutter developer in Bangkok. Mobile and full-stack work since 2019: e-commerce, e-book and ERP apps.">
+  <meta name="theme-color" content="#0a0c08">
+  <meta property="og:title" content="Han Tun Zaw · Senior Flutter Developer">
+  <meta property="og:description" content="Open a terminal session with Han. Flutter, mobile and full-stack since 2019.">
+  <meta property="og:url" content="https://www.hantunzaw.dev/">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="assets/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@300;400;600;700&display=swap">
+  <link rel="stylesheet" href="assets/css/term.css">
+  <script>
+    // decide before first paint so the page never flashes ahead of the boot screen
+    (function (d) {
+      var c = d.documentElement.classList, rm = matchMedia("(prefers-reduced-motion: reduce)").matches, seen = false;
+      try { seen = !!sessionStorage.getItem("hzsite.booted"); } catch (e) {}
+      if (!seen && !rm && !location.hash) c.add("booting");
+      if (!rm) c.add("revealing");
+    })(document);
+  </script>
 </head>
-
 <body>
-  <script type="text/javascript" src="assets/js/index.js">
-  </script>
-  <div id="console"></div>
-  </script>
-</body>
+  <div class="crt" aria-hidden="true"></div>
 
+  <div class="boot" id="boot" aria-hidden="true">
+    <pre id="boot-log"></pre>
+    <p class="boot-skip">press any key to skip</p>
+  </div>
+
+  <main class="term" id="term">
+    <header class="titlebar">
+      <span class="tb-dot" aria-hidden="true"></span>
+      <span>han@hantunzaw.dev: ~</span>
+      <span class="tb-dim">hzsh</span>
+      <span class="tb-dim tb-size" id="tb-size"></span>
+    </header>
+
+    <div class="screen" id="screen">
+      <p class="motd"><span class="dim">Last login: <span id="last-login"></span> from</span> <span id="from">your browser</span></p>
+
+      <section class="hero" aria-labelledby="who">
+        <pre class="portrait" id="portrait" role="img" aria-label="ASCII art portrait of Han Tun Zaw: messy dark hair, rectangular glasses, headphones around the neck"></pre>
+
+        <div class="fetch">
+          <h1 id="who"><span class="acc">han</span>@<span class="acc">hantunzaw.dev</span></h1>
+          <p class="rule" aria-hidden="true">--------------------------</p>
+          <dl>
+            <div><dt>name</dt><dd>Han Tun Zaw</dd></div>
+            <div><dt>role</dt><dd>Senior Flutter Developer</dd></div>
+            <div><dt>base</dt><dd>Bangkok, TH <span class="dim" id="clock"></span></dd></div>
+            <div><dt>uptime</dt><dd id="uptime">shipping apps since 2019</dd></div>
+            <div><dt>mobile</dt><dd>Dart · Flutter · Kotlin · Swift</dd></div>
+            <div><dt>web</dt><dd>TypeScript · PHP · WordPress · Odoo</dd></div>
+            <div><dt>shipped</dt><dd>e-commerce, e-book &amp; ERP apps</dd></div>
+            <div><dt>shell</dt><dd>hzsh 3.0 <span class="dim">(type <kbd>help</kbd>)</span></dd></div>
+          </dl>
+          <p class="swatch" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></p>
+          <p class="links">
+            <a href="https://github.com/hantunzawDev" rel="me">github</a>
+            <a href="https://www.linkedin.com/in/hantunzaw/" rel="me">linkedin</a>
+            <a href="mailto:dev.hantunzaw@gmail.com">email</a>
+            <a href="HanTunZawResume.pdf">resume.pdf</a>
+          </p>
+        </div>
+      </section>
+
+      <div class="log" id="log" aria-live="polite"></div>
+
+      <form class="promptline" id="form" autocomplete="off">
+        <label for="cmd"><span class="ps1">han@hantunzaw.dev</span><span class="dim">:</span><span class="ps-path">~</span><span class="dim">$</span></label>
+        <input id="cmd" name="cmd" type="text" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="go" aria-describedby="hint">
+      </form>
+      <p class="hint dim" id="hint">Type a command or tap one below. <kbd>Tab</kbd> completes, <kbd>↑</kbd> <kbd>↓</kbd> history.</p>
+    </div>
+
+    <nav class="chips" aria-label="Quick commands">
+      <button type="button" data-run="about">about</button>
+      <button type="button" data-run="work">work</button>
+      <button type="button" data-run="projects">projects</button>
+      <button type="button" data-run="stack">stack</button>
+      <button type="button" data-run="contact">contact</button>
+      <button type="button" data-run="resume">resume</button>
+      <button type="button" data-run="help">help</button>
+    </nav>
+
+    <footer class="status" aria-hidden="true">
+      <span class="st-sess">[han]</span>
+      <span class="st-win" id="st-win">0:hzsh*</span>
+      <span class="st-fill"></span>
+      <span id="st-theme">lime</span>
+      <span id="st-time"></span>
+    </footer>
+  </main>
+
+  <noscript><p class="noscript">This page is a terminal and needs JavaScript for commands. Everything important is above: GitHub, LinkedIn, email and resume.</p></noscript>
+  <script type="module" src="assets/js/term.js"></script>
+</body>
 </html>
