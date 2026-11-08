@@ -162,6 +162,12 @@ export function createGlobe(canvas) {
 
   return {
     setLocation(lat, lon) { target = { lat, lon }; place(); updateSun(); if (reduce) render(0); },
+    setColors(accent, alert) {
+      uniforms.uColor.value = new THREE.Color(accent);
+      gratMat.color.set(accent);
+      termMat.color.set(alert); core.material.color.set(alert); ringMat.color.set(alert);
+      if (reduce) render(0);
+    },
     isNight(lat, lon) { return latLonToVec(lat, lon, 1).dot(uniforms.uSun.value) < 0; },
     dispose() {
       stop(); ro.disconnect(); io.disconnect();

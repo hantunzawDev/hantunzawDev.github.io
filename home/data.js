@@ -1,6 +1,5 @@
-// hzOS data layer: storage, caching, weather, calendar, news, quotes.
+// hzOS data layer: storage, caching, weather, news, quotes.
 // UI-free so any shell can render it.
-import { parseICS } from "./ical.js";
 
 /* ---------- storage ---------- */
 export const store = {
@@ -19,9 +18,10 @@ export const DEFAULT_LINKS = [
 ].join("\n");
 
 export const settings = Object.assign(
-  { name: "Han", city: "Yangon", h24: true, calMode: "off", calKey: "", calIds: "", icalUrl: "", proxy: "", links: DEFAULT_LINKS },
+  { name: "Han", city: "Yangon", h24: true, theme: "lime", links: DEFAULT_LINKS },
   store.get("settings", {}),
 );
+for (const k of ["calMode", "calKey", "calIds", "icalUrl", "proxy"]) delete settings[k];
 export function saveSettings() { store.set("settings", settings); }
 
 export function links() {
@@ -200,41 +200,6 @@ export async function fetchWeather(force = false) {
     rainy: RAINY.includes(code),
     guess: guess(d, hourly),
   };
-}
-
-/* ---------- calendar (Google, read-only) ---------- */
-export function calendarConfigured() {
-  if (settings.calMode === "api") return !!(settings.calKey && settings.calIds);
-  if (settings.calMode === "ical") return !!(settings.icalUrl && settings.proxy);
-  return false;
-}
-async function loadEvents() {
-  const start = new Date(); start.setHours(0, 0, 0, 0);
-  const end = new Date(start); end.setDate(end.getDate() + 1);
-  if (settings.calMode === "api") {
-    const ids = settings.calIds.split(",").map((s) => s.trim()).filter(Boolean);
-    const all = await Promise.all(ids.map(async (id) => {
-      const u = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(id)}/events`);
-      Object.entries({ key: settings.calKey, timeMin: start.toISOString(), timeMax: end.toISOString(), singleEvents: "true", orderBy: "startTime", maxResults: "50" })
-        .forEach(([k, v]) => u.searchParams.set(k, v));
-      const j = await getJSON(u);
-      return (j.items || []).filter((e) => e.status !== "cancelled").map((e) => ({
-        title: e.summary || "(busy)", where: e.location || "", allDay: !!e.start.date,
-        start: e.start.dateTime || e.start.date, end: e.end.dateTime || e.end.date, url: e.htmlLink,
-      }));
-    }));
-    return all.flat();
-  }
-  const r = await fetch(settings.proxy + encodeURIComponent(settings.icalUrl));
-  if (!r.ok) throw new Error("proxy " + r.status);
-  return parseICS(await r.text(), start, end).map((e) => ({ ...e, start: e.start.toISOString(), end: e.end.toISOString() }));
-}
-export async function fetchCalendar(force = false) {
-  const sig = (settings.calMode + settings.calIds + settings.icalUrl).length;
-  const { data, t, stale } = await cached(`cal.${dayKey()}.${sig}`, 10, loadEvents, force);
-  const items = data.map((e) => ({ ...e, s: new Date(e.start), e: new Date(e.end) }))
-    .sort((a, b) => (b.allDay - a.allDay) || (a.s - b.s));
-  return { items, t, stale };
 }
 
 /* ---------- news ---------- */

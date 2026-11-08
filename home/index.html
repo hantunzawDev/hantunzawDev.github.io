@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>hzOS</title>
-  <meta name="description" content="hzOS: Han's browser home. Clock, weather, agenda, todo, focus timer and feeds, run like a tiny operating system.">
+  <meta name="description" content="hzOS: Han's browser home. Clock, weather, todo, notes, focus timer, feeds and games, run like a tiny operating system.">
   <meta name="theme-color" content="#0a0c08">
   <meta name="robots" content="noindex">
   <link rel="icon" href="../assets/favicon.ico">
@@ -15,15 +15,17 @@
   <!--
     Credits (thank you):
     Weather: Open-Meteo (CC BY 4.0) · Reverse geocoding: BigDataCloud
-    Feeds: Hacker News via Algolia, DEV API, GitHub Search API, Wikipedia featured feed (CC BY-SA)
+    Feeds: Hacker News via Algolia, DEV API, GitHub Search API, Wikipedia (CC BY-SA)
+    define: Wiktionary (CC BY-SA) · joke: icanhazdadjoke.com
     Fonts: Doto, Martian Mono (SIL OFL) · 3D: three.js (MIT) · Motion: GSAP
   -->
   <script type="importmap">
     { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
   </script>
 </head>
-<body>
+<body data-mode="desktop">
   <div class="crt" aria-hidden="true"></div>
+  <canvas class="matrix" id="matrix" aria-hidden="true" hidden></canvas>
 
   <!-- boot -->
   <div class="boot" id="boot" aria-hidden="true" hidden>
@@ -35,14 +37,21 @@
   <header class="menubar">
     <span class="menubar__logo">◆ hzOS</span>
     <nav class="menubar__apps" id="dock" aria-label="Apps"></nav>
+    <div class="menubar__modes" role="radiogroup" aria-label="Mode">
+      <button type="button" role="radio" data-mode="desktop" aria-checked="true">desktop</button>
+      <button type="button" role="radio" data-mode="focus" aria-checked="false">focus</button>
+      <button type="button" role="radio" data-mode="zen" aria-checked="false">zen</button>
+    </div>
     <div class="menubar__status">
-      <span id="st-net">net:on</span>
+      <span id="st-timer" hidden></span>
+      <span id="st-net" class="hide-sm">net:on</span>
       <span id="st-wx" class="hide-sm">wx:--</span>
       <span id="st-date" class="hide-sm">--</span>
       <time id="st-time">--:--:--</time>
     </div>
   </header>
 
+  <!-- desktop -->
   <main class="desktop" id="desktop">
     <h1 class="sr-only">hzOS home</h1>
 
@@ -59,14 +68,9 @@
     <section class="win" data-app="wx" aria-label="Weather">
       <header class="win__bar"><span class="win__title">wx.sh</span><span class="win__ctrl"><button type="button" data-close aria-label="Close weather">x</button></span></header>
       <div class="win__body wx" id="wx">
-        <p class="prompt">$ wx <span id="wx-place">…</span></p>
+        <p class="prompt">$ wx</p>
         <p class="dim">reading the sky…</p>
       </div>
-    </section>
-
-    <section class="win" data-app="cal" aria-label="Today's calendar">
-      <header class="win__bar"><span class="win__title">today.cal</span><span class="win__meta" id="cal-meta"></span><span class="win__ctrl"><button type="button" data-close aria-label="Close calendar">x</button></span></header>
-      <div class="win__body"><ol class="cal" id="cal" aria-live="polite"></ol></div>
     </section>
 
     <section class="win" data-app="todo" aria-label="Todo list">
@@ -80,14 +84,23 @@
       </div>
     </section>
 
+    <section class="win" data-app="notes" aria-label="Notes">
+      <header class="win__bar"><span class="win__title">notes.md</span><span class="win__meta" id="notes-meta"></span><span class="win__ctrl"><button type="button" data-close aria-label="Close notes">x</button></span></header>
+      <div class="win__body notes">
+        <label class="sr-only" for="notes">Notes</label>
+        <textarea id="notes" spellcheck="false" placeholder="# scratchpad&#10;saved as you type."></textarea>
+      </div>
+    </section>
+
     <section class="win" data-app="focus" aria-label="Focus timer">
       <header class="win__bar"><span class="win__title">focus.exe</span><span class="win__meta" id="focus-meta"></span><span class="win__ctrl"><button type="button" data-close aria-label="Close focus timer">x</button></span></header>
-      <div class="win__body focus">
-        <p class="focus__time" id="focus-time" role="timer">25:00</p>
-        <pre class="focus__bar" id="focus-bar" aria-hidden="true"></pre>
+      <div class="win__body focus" data-focus-view>
+        <p class="focus__time" data-focus-time role="timer">25:00</p>
+        <pre class="focus__bar" data-focus-bar aria-hidden="true"></pre>
         <div class="focus__row">
-          <button type="button" class="key key--on" id="focus-start">start</button>
-          <button type="button" class="key" id="focus-reset">reset</button>
+          <button type="button" class="key key--on" data-focus-start>start</button>
+          <button type="button" class="key" data-focus-reset>reset</button>
+          <button type="button" class="key" data-mode-go="focus" title="full screen focus mode">full</button>
           <span class="focus__len" role="radiogroup" aria-label="Session length">
             <button type="button" class="key" role="radio" aria-checked="true" data-min="25">25</button>
             <button type="button" class="key" role="radio" aria-checked="false" data-min="50">50</button>
@@ -127,31 +140,26 @@
       </div>
     </section>
 
-    <section class="win win--config" data-app="config" aria-label="Settings" hidden>
+    <section class="win" data-app="game" aria-label="Game" hidden>
+      <header class="win__bar"><span class="win__title" id="game-title">game.exe</span><span class="win__meta" id="game-meta"></span><span class="win__ctrl"><button type="button" data-close aria-label="Close game">x</button></span></header>
+      <div class="win__body game" id="game"></div>
+    </section>
+
+    <section class="win" data-app="config" aria-label="Settings" hidden>
       <header class="win__bar"><span class="win__title">config.ini</span><span class="win__ctrl"><button type="button" data-close aria-label="Close settings">x</button></span></header>
       <form class="win__body config" id="config" autocomplete="off">
         <p class="prompt">[user]</p>
         <label>name <input name="name" type="text" maxlength="40"></label>
         <label>city <input name="city" type="text" maxlength="60" placeholder="Yangon"></label>
         <label class="row"><input name="h24" type="checkbox"> 24h clock</label>
-        <p class="prompt">[calendar]</p>
-        <label>mode
-          <select name="calMode">
-            <option value="off">off</option>
-            <option value="ical">secret iCal URL via my proxy</option>
-            <option value="api">Google API key + calendar id</option>
+        <label>theme
+          <select name="theme">
+            <option value="lime">lime phosphor</option>
+            <option value="amber">amber terminal</option>
+            <option value="ice">ice blue</option>
+            <option value="paper">paper white</option>
           </select>
         </label>
-        <div data-show="ical">
-          <label>ical_url <input name="icalUrl" type="url" spellcheck="false" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></label>
-          <label>proxy <input name="proxy" type="url" spellcheck="false" placeholder="https://ical-proxy.you.workers.dev/?url="></label>
-          <p class="dim">deploy home/worker/ical-proxy.js first. never use a public proxy for a secret url.</p>
-        </div>
-        <div data-show="api">
-          <label>api_key <input name="calKey" type="text" spellcheck="false"></label>
-          <label>calendar_ids <input name="calIds" type="text" spellcheck="false" placeholder="you@gmail.com"></label>
-          <p class="dim">public calendars only. restrict the key to www.hantunzaw.dev/*</p>
-        </div>
         <p class="prompt">[links] <span class="dim">name | url, one per line</span></p>
         <label class="sr-only" for="cfg-links">Links</label>
         <textarea id="cfg-links" name="links" rows="6" spellcheck="false"></textarea>
@@ -163,6 +171,34 @@
       </form>
     </section>
   </main>
+
+  <!-- full-screen modes -->
+  <section class="stage stage--focus" id="stage-focus" aria-label="Focus mode" hidden>
+    <p class="stage__label">focus mode <span class="dim">· esc to leave</span></p>
+    <div class="focus focus--stage" data-focus-view>
+      <p class="focus__task" id="stage-task"></p>
+      <p class="focus__time" data-focus-time role="timer">25:00</p>
+      <pre class="focus__bar" data-focus-bar aria-hidden="true"></pre>
+      <div class="focus__row">
+        <button type="button" class="key key--on" data-focus-start>start</button>
+        <button type="button" class="key" data-focus-reset>reset</button>
+        <button type="button" class="key" id="stage-next-task">next task</button>
+        <span class="focus__len" role="radiogroup" aria-label="Session length">
+          <button type="button" class="key" role="radio" aria-checked="true" data-min="25">25</button>
+          <button type="button" class="key" role="radio" aria-checked="false" data-min="50">50</button>
+          <button type="button" class="key" role="radio" aria-checked="false" data-min="5">05</button>
+        </span>
+      </div>
+      <p class="stage__sessions dim" id="stage-sessions"></p>
+    </div>
+  </section>
+
+  <section class="stage stage--zen" id="stage-zen" aria-label="Zen mode" hidden>
+    <p class="stage__label">zen <span class="dim">· esc to leave</span></p>
+    <p class="zen__time" id="zen-time">--:--</p>
+    <p class="zen__date dim" id="zen-date"></p>
+    <blockquote class="zen__quote" id="zen-quote"></blockquote>
+  </section>
 
   <!-- command line -->
   <footer class="cmd">
