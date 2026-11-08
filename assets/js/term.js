@@ -130,7 +130,7 @@ addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { lay
 function entry(cmd, html, { scroll = true } = {}) {
   const e = document.createElement("div");
   e.className = "entry";
-  e.innerHTML = (cmd != null ? `<div class="cmdline"><span class="ps1">han@hantunzaw.dev</span><span class="dim">:</span><span class="ps-path">~</span><span class="dim">$</span> ${esc(cmd)}</div>` : "") +
+  e.innerHTML = (cmd != null ? `<div class="cmdline"><span class="ps1">echo@hantunzaw.dev</span><span class="dim">:</span><span class="ps-path">~</span><span class="dim">$</span> ${esc(cmd)}</div>` : "") +
     (html ? `<div class="out">${html}</div>` : "");
   log.append(e);
   if (scroll) e.scrollIntoView({ block: "start" }); // instant: keyboard-driven, repeated many times
