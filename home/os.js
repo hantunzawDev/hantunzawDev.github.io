@@ -6,6 +6,7 @@ import {
 import { createMap, subsolar } from "./map.js";
 import { PACK_NAMES, ROTATIONS, parseLine, formatLine, contextLabel, slotKey } from "./quotes.js";
 import { snake, typer } from "./games.js";
+import { bughunt } from "./fps.js";
 import { cowsay, neofetch, eightBall, HACK, TRAIN, matrix, calc } from "./fun.js";
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -513,7 +514,7 @@ tabs.forEach((b, i) => {
    game.exe
    ========================================================= */
 let game = null;
-const GAMES = { snake: [snake, "snake.exe"], type: [typer, "type.exe"] };
+const GAMES = { snake: [snake, "snake.exe"], type: [typer, "type.exe"], fps: [bughunt, "bughunt.exe"] };
 function startGame(name) {
   stopGame();
   const [fn, title] = GAMES[name];
@@ -591,7 +592,7 @@ const HELP = {
   tools:  "= <math> · pass [len] · uuid · b64 <text> · unb64 <text> · g|yt|ddg|gh <query> · <link name>",
   quotes: "quote [now] · quote add <text> -- <author> @tags · quote ls · quote rm <n> · quote rotate visit|30m|hourly|daily · quote pack <name> on|off · quote match on|off · quote tags",
   fun:    "neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee",
-  games:  "snake · type · guess",
+  games:  "snake · type · guess · fps (bughunt)",
   system: "open|close|max <app> · ls · layout reset · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
 };
 const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : "#"; } catch { return "#"; } }; // feed/calendar URLs are third-party data
@@ -707,7 +708,7 @@ const COMMANDS = {
       os: `hzOS ${VERSION}`, host: browser, resolution: `${screen.width}x${screen.height}`,
       uptime: fmtUptime(Date.now() - bootedAt), theme: settings.theme, tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
       tasks: `${todos.filter((t) => !t.done).length} open`, focus: `${store.get("focus." + dayKey(), 0)} today`,
-      snake: `best ${store.get("snake.best", 0)}`, typing: `best ${store.get("typer.best", 0)} wpm`,
+      snake: `best ${store.get("snake.best", 0)}`, typing: `best ${store.get("typer.best", 0)} wpm`, bughunt: `best ${store.get("fps.best", 0)}`,
     }));
   },
   cowsay: (a) => art(cowsay(a || quote?.text || "moo.")),
@@ -760,6 +761,8 @@ const COMMANDS = {
   snake: () => { startGame("snake"); log("snake.exe: arrows/wasd, space to pause.", "ok"); },
   type: () => { startGame("type"); log("type.exe: type the quote. esc for a new one.", "ok"); },
   typing: () => COMMANDS.type(),
+  fps: () => { startGame("fps"); log("bughunt.exe: click to lock the mouse. wasd move, mouse/arrows turn, space or click fires, m map.", "ok"); },
+  bughunt: () => COMMANDS.fps(),
   guess: (a) => {
     if (!guess || a === "new") { guess = { n: 1 + Math.floor(Math.random() * 100), tries: 0 }; return log("guess: i picked a number 1-100. type a number.", "ok"); }
     if (a) return guessTry(a);
@@ -923,7 +926,7 @@ async function boot() {
     "cpu .................... ok",
     `mount /home/${(settings.name || "user").toLowerCase()} ........ ok`,
     "net: open-meteo hn dev gh wiki .. ok",
-    "games: snake type guess ......... ok",
+    "games: snake type guess fps ..... ok",
     `todo: ${todos.filter((t) => !t.done).length} open · notes: ${notesEl.value.length} ch`,
     "",
     `${greeting(new Date().getHours())}, ${(settings.name || "friend").toLowerCase()}.`,
