@@ -15,28 +15,31 @@ const ME = {
   resume: "Resume-HanTunZaw.pdf",
   about: [
     "I'm Han, a mobile developer based in Bangkok.",
-    "I build Flutter apps for Android and iOS, and I've done my share of full-stack web along the way: WordPress, WooCommerce, Odoo and Drupal.",
-    "Most of my work is B2B and under NDA, so the details live in conversations rather than public repos. Ask me about payment flows, screenshot protection, or wiring Flutter into an ERP.",
+    "Right now I'm at Orange Cap Innovative, working on TAGTHAi, a travel super app: passes and tickets, QR access, and the buying and payment flows behind them.",
+    "Before that I built Flutter apps for Android and iOS, and did my share of full-stack web along the way: WordPress, WooCommerce, Odoo and Drupal.",
+    "Most of my work is B2B and confidential, so the details live in conversations rather than public repos. Ask me about payment flows, screenshot protection, or wiring Flutter into an ERP.",
   ],
+  education: { what: "Pearson BTEC HND in Computing", where: "EduClaas" },
   work: [
-    { when: "Aug 2023 - Present", co: "Orange Cap", role: "Software Engineer", did: "TAGTHAi travel and merchant apps: passes, tickets, QR access and payment confirmation." },
+    { when: "Aug 2023 - Present", co: "Orange Cap Innovative", role: "Software Engineer (Mobile)", did: "TAGTHAi travel and merchant apps: passes, tickets, QR access and payments. Flutter project upkeep, code reviews, testing." },
     { when: "Jan 2023 - May 2023", co: "Ethical Digit", role: "Senior Flutter Developer", did: "E-book app with in-app purchases, screenshot protection and one-device login." },
     { when: "Jan 2022 - Jul 2023", co: "Asaygo", role: "Senior Flutter Developer", did: "Redesigned the app in Figma, then rebuilt it: responsive layouts, third-party APIs, code reviews." },
-    { when: "Nov 2021 - Jan 2022", co: "eWhale Myanmar", role: "Flutter Developer", did: "Flutter e-commerce app on top of WooCommerce, with payment gateways." },
+    { when: "Nov 2021 - Jan 2022", co: "eWhale Myanmar", role: "Flutter Developer", did: "Flutter e-commerce app on top of WooCommerce, with secure payment gateways." },
     { when: "Aug 2020 - Nov 2021", co: "7th Computing", role: "Full-stack Developer", did: "Flutter apps for Android and iOS, Odoo ERP customisation, WordPress integration." },
     { when: "Mar 2020 - Aug 2021", co: "Resonance Pte Ltd", role: "WordPress Developer", did: "Custom WordPress and WooCommerce sites and plugins." },
-    { when: "Aug 2019 - Mar 2020", co: "Zino Tech", role: "Junior Web Developer", did: "Client sites in Drupal, PHP, Vue and jQuery." },
+    { when: "Aug 2019 - Mar 2020", co: "Zino Tech", role: "Junior Web Developer", did: "Client sites in Drupal, PHP, Vue, jQuery and Twig." },
   ],
   projects: [
-    { name: "ChoChoLay Zay", at: "Asaygo", tags: "Flutter · GetX · Figma", did: "C2C marketplace with maps and secure chat for local buyers and sellers." },
-    { name: "APTM", at: "Ethical Digit", tags: "Flutter · Riverpod", did: "E-book and audiobook reader: PDF, audio and video, with screenshot protection." },
-    { name: "DuDuZayWal", at: "eWhale", tags: "Flutter · WooCommerce · GetX", did: "Shopping app that talks straight to a WordPress store." },
-    { name: "Umbrella", at: "7th Computing", tags: "Flutter · REST", did: "Document management with a protected PDF viewer." },
-    { name: "Win Brother", at: "7th Computing", tags: "Flutter · Odoo", did: "HR app on Odoo: people, leave and payroll in one place." },
-    { name: "BOC", at: "7th Computing", tags: "Flutter · Odoo", did: "ERP client covering HR, operations and fleet." },
+    { name: "TAGTHAi", at: "Orange Cap", tags: "Flutter · BLoC · Modular", did: "Travel super app. I work on the pass and ticket system and the buying and payment flows, making activation, QR access and checkout smoother and more reliable." },
+    { name: "TAGTHAi Merchant", at: "Orange Cap", tags: "Flutter · GetX · Modular", did: "The partner side: managing tourist passes, validating tickets and confirming payments. I streamlined the flows and tuned performance for stores and service providers." },
+    { name: "ChoChoLay Zay", at: "Asaygo", tags: "Flutter · GetX · Material UI · Figma", did: "C2C marketplace with maps and secure chat for local buyers and sellers." },
+    { name: "DuDuZayWal", at: "eWhale", tags: "Flutter · WooCommerce · GetX · FlutterFlow", did: "Shopping app that connects to WordPress and WooCommerce, browsing several online stores in one place." },
+    { name: "WB Work Day", at: "7th Computing", tags: "Flutter · Odoo · REST", did: "HR and ERP app for Win Brother on Odoo: people, HR and Odoo management in one platform." },
+    { name: "BOC", at: "7th Computing", tags: "Flutter · Odoo · REST", did: "ERP client on Odoo covering HR, operations and fleet management." },
   ],
   stack: {
-    mobile: "Dart, Flutter, Kotlin, Swift · GetX, Riverpod, Material",
+    mobile: "Dart, Flutter, Kotlin, Swift · BLoC, GetX, Modular",
+    ui: "Material UI, GetX UI, Bootstrap",
     web: "TypeScript, JavaScript, HTML, CSS/SCSS, PHP, SQL",
     platforms: "WordPress, WooCommerce, Odoo, Drupal, Three.js",
     tools: "VS Code, Git, Sourcetree, Node.js",
@@ -141,9 +144,9 @@ const run = (c) => `<button type="button" class="inline" data-run="${esc(c)}">${
 const link = (href, label = href) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(label)}</a>`;
 
 /* ---------- commands ---------- */
-const FILES = { "about.txt": "about", "work.log": "work", "projects/": "projects", "stack.json": "stack", "contact.vcf": "contact", "resume.pdf": "resume", "hzos/": "hzos" };
+const FILES = { "about.txt": "about", "work.log": "work", "education.txt": "education", "projects/": "projects", "stack.json": "stack", "contact.vcf": "contact", "resume.pdf": "resume", "hzos/": "hzos" };
 const HELP = [
-  ["about", "who I am"], ["work", "where I've worked"], ["projects", "things I've shipped"], ["stack", "languages and tools"],
+  ["about", "who I am"], ["work", "where I've worked"], ["education", "where I studied"], ["projects", "things I've shipped"], ["stack", "languages and tools"],
   ["contact", "how to reach me"], ["resume", "open my resume (PDF)"], ["email", "copy my email address"],
   ["github", "open GitHub"], ["linkedin", "open LinkedIn"], ["hzos", "my browser home page OS"],
   ["ls · cat <file>", "browse the home dir"], ["theme lime|amber|ice", "change phosphor"],
@@ -154,6 +157,7 @@ const COMMANDS = {
   help: () => `<div class="grid">${HELP.map(([c, d]) => `<span>${run(c.split(" ")[0])}${esc(c.slice(c.split(" ")[0].length))} <span class="dim">${esc(d)}</span></span>`).join("")}</div>\n<span class="dim">Some commands aren't listed. Poke around.</span>`,
   about: () => ME.about.map(esc).join("\n\n") + `\n\n<span class="dim">next:</span> ${run("work")} ${run("projects")} ${run("contact")}`,
   whoami: () => COMMANDS.about(),
+  education: () => `<b>${esc(ME.education.what)}</b> <span class="dim">·</span> ${esc(ME.education.where)}\n<span class="dim">The rest I learned shipping apps since 2019:</span> ${run("work")}`,
   work: () => ME.work.map((j) => `<div class="job"><span class="when">${esc(j.when)}</span><span><b>${esc(j.co)}</b> <span class="acc">${esc(j.role)}</span>\n${esc(j.did)}</span></div>`).join("") +
     `\n<span class="dim">Full history in the</span> ${run("resume")}<span class="dim">.</span>`,
   projects: () => ME.projects.map((p) => `<div class="job"><span class="when">${esc(p.at)}</span><span><b>${esc(p.name)}</b> <span class="dim">${esc(p.tags)}</span>\n${esc(p.did)}</span></div>`).join("") +
@@ -194,7 +198,7 @@ const COMMANDS = {
   hi: () => COMMANDS.hello(),
   matrix: () => { matrix(); return `<span class="dim">wake up, visitor... (any key to exit)</span>`; },
 };
-const ALIASES = { "?": "help", man: "help", experience: "work", jobs: "work", skills: "stack", cv: "resume", mail: "email", home: "hzos", cls: "clear", ll: "ls", dir: "ls" };
+const ALIASES = { "?": "help", man: "help", edu: "education", school: "education", study: "education", experience: "work", jobs: "work", skills: "stack", cv: "resume", mail: "email", home: "hzos", cls: "clear", ll: "ls", dir: "ls" };
 
 // closest command by edit distance, for typos like "wrok" or "projcts"
 function suggest(w) {
@@ -229,7 +233,7 @@ async function exec(raw, { record = true } = {}) {
   else html = await fn(arg);
   if (html === null) return; // clear
   entry(line, html);
-  if (fn && ["about", "work", "projects", "stack", "contact"].includes(name)) history.replaceState(null, "", "#" + name);
+  if (fn && ["about", "work", "education", "projects", "stack", "contact"].includes(name)) history.replaceState(null, "", "#" + name);
 }
 
 /* ---------- input ---------- */
