@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>hzOS</title>
+  <meta name="description" content="hzOS: Han's browser home. Clock, weather, agenda, todo, focus timer and feeds, run like a tiny operating system.">
+  <meta name="theme-color" content="#0a0c08">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="../assets/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Doto:wght@700;900&family=Martian+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="os.css">
+  <!--
+    Credits (thank you):
+    Weather: Open-Meteo (CC BY 4.0) · Reverse geocoding: BigDataCloud
+    Feeds: Hacker News via Algolia, DEV API, GitHub Search API, Wikipedia featured feed (CC BY-SA)
+    Fonts: Doto, Martian Mono (SIL OFL) · 3D: three.js (MIT) · Motion: GSAP
+  -->
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <div class="crt" aria-hidden="true"></div>
+
+  <!-- boot -->
+  <div class="boot" id="boot" aria-hidden="true" hidden>
+    <pre id="boot-log"></pre>
+    <p class="boot__skip">press any key</p>
+  </div>
+
+  <!-- menubar -->
+  <header class="menubar">
+    <span class="menubar__logo">◆ hzOS</span>
+    <nav class="menubar__apps" id="dock" aria-label="Apps"></nav>
+    <div class="menubar__status">
+      <span id="st-net">net:on</span>
+      <span id="st-wx" class="hide-sm">wx:--</span>
+      <span id="st-date" class="hide-sm">--</span>
+      <time id="st-time">--:--:--</time>
+    </div>
+  </header>
+
+  <main class="desktop" id="desktop">
+    <h1 class="sr-only">hzOS home</h1>
+
+    <section class="win" data-app="clock" aria-label="Clock">
+      <header class="win__bar"><span class="win__title">clock.app</span><span class="win__ctrl"><button type="button" data-close aria-label="Close clock">x</button></span></header>
+      <div class="win__body clock">
+        <p class="clock__hello" id="hello">hello.</p>
+        <p class="clock__time"><time id="clock">--:--</time><span id="clock-s" class="clock__sec">--</span></p>
+        <p class="clock__date" id="clock-date">&nbsp;</p>
+        <pre class="clock__bars" id="clock-bars"></pre>
+      </div>
+    </section>
+
+    <section class="win" data-app="wx" aria-label="Weather">
+      <header class="win__bar"><span class="win__title">wx.sh</span><span class="win__ctrl"><button type="button" data-close aria-label="Close weather">x</button></span></header>
+      <div class="win__body wx" id="wx">
+        <p class="prompt">$ wx <span id="wx-place">…</span></p>
+        <p class="dim">reading the sky…</p>
+      </div>
+    </section>
+
+    <section class="win" data-app="cal" aria-label="Today's calendar">
+      <header class="win__bar"><span class="win__title">today.cal</span><span class="win__meta" id="cal-meta"></span><span class="win__ctrl"><button type="button" data-close aria-label="Close calendar">x</button></span></header>
+      <div class="win__body"><ol class="cal" id="cal" aria-live="polite"></ol></div>
+    </section>
+
+    <section class="win" data-app="todo" aria-label="Todo list">
+      <header class="win__bar"><span class="win__title">todo.txt</span><span class="win__meta" id="todo-meta"></span><span class="win__ctrl"><button type="button" data-close aria-label="Close todo">x</button></span></header>
+      <div class="win__body todo">
+        <ul class="todo__list" id="todo"></ul>
+        <form class="todo__add" id="todo-form" autocomplete="off">
+          <label for="todo-input">+</label>
+          <input id="todo-input" type="text" placeholder="add a task" maxlength="140">
+        </form>
+      </div>
+    </section>
+
+    <section class="win" data-app="focus" aria-label="Focus timer">
+      <header class="win__bar"><span class="win__title">focus.exe</span><span class="win__meta" id="focus-meta"></span><span class="win__ctrl"><button type="button" data-close aria-label="Close focus timer">x</button></span></header>
+      <div class="win__body focus">
+        <p class="focus__time" id="focus-time" role="timer">25:00</p>
+        <pre class="focus__bar" id="focus-bar" aria-hidden="true"></pre>
+        <div class="focus__row">
+          <button type="button" class="key key--on" id="focus-start">start</button>
+          <button type="button" class="key" id="focus-reset">reset</button>
+          <span class="focus__len" role="radiogroup" aria-label="Session length">
+            <button type="button" class="key" role="radio" aria-checked="true" data-min="25">25</button>
+            <button type="button" class="key" role="radio" aria-checked="false" data-min="50">50</button>
+            <button type="button" class="key" role="radio" aria-checked="false" data-min="5">05</button>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <section class="win" data-app="globe" aria-label="World view">
+      <header class="win__bar"><span class="win__title">world.3d</span><span class="win__ctrl"><button type="button" data-close aria-label="Close world view">x</button></span></header>
+      <div class="win__body globe">
+        <canvas id="globe" aria-hidden="true"></canvas>
+        <p class="globe__label" id="globe-label">locating…</p>
+      </div>
+    </section>
+
+    <section class="win" data-app="fortune" aria-label="Quote">
+      <header class="win__bar"><span class="win__title">fortune</span><span class="win__ctrl"><button type="button" data-close aria-label="Close quote">x</button></span></header>
+      <div class="win__body fortune">
+        <p class="prompt">$ fortune</p>
+        <blockquote id="fortune-text"></blockquote>
+        <p class="fortune__by"><span id="fortune-by"></span> <button type="button" class="key" id="fortune-next">again</button></p>
+      </div>
+    </section>
+
+    <section class="win" data-app="feed" aria-label="News feeds">
+      <header class="win__bar"><span class="win__title">feed.rss</span><span class="win__meta" id="feed-meta"></span><span class="win__ctrl"><button type="button" data-close aria-label="Close feeds">x</button></span></header>
+      <div class="win__body feed">
+        <div class="feed__tabs" role="tablist" aria-label="Feed source">
+          <button role="tab" id="tab-hn" data-src="hn" aria-selected="true" aria-controls="feed">hn</button>
+          <button role="tab" id="tab-dev" data-src="dev" aria-selected="false" aria-controls="feed" tabindex="-1">dev</button>
+          <button role="tab" id="tab-gh" data-src="gh" aria-selected="false" aria-controls="feed" tabindex="-1">gh</button>
+          <button role="tab" id="tab-world" data-src="world" aria-selected="false" aria-controls="feed" tabindex="-1">world</button>
+        </div>
+        <ol class="feed__list" id="feed" role="tabpanel" aria-labelledby="tab-hn" aria-live="polite"></ol>
+      </div>
+    </section>
+
+    <section class="win win--config" data-app="config" aria-label="Settings" hidden>
+      <header class="win__bar"><span class="win__title">config.ini</span><span class="win__ctrl"><button type="button" data-close aria-label="Close settings">x</button></span></header>
+      <form class="win__body config" id="config" autocomplete="off">
+        <p class="prompt">[user]</p>
+        <label>name <input name="name" type="text" maxlength="40"></label>
+        <label>city <input name="city" type="text" maxlength="60" placeholder="Yangon"></label>
+        <label class="row"><input name="h24" type="checkbox"> 24h clock</label>
+        <p class="prompt">[calendar]</p>
+        <label>mode
+          <select name="calMode">
+            <option value="off">off</option>
+            <option value="ical">secret iCal URL via my proxy</option>
+            <option value="api">Google API key + calendar id</option>
+          </select>
+        </label>
+        <div data-show="ical">
+          <label>ical_url <input name="icalUrl" type="url" spellcheck="false" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></label>
+          <label>proxy <input name="proxy" type="url" spellcheck="false" placeholder="https://ical-proxy.you.workers.dev/?url="></label>
+          <p class="dim">deploy home/worker/ical-proxy.js first. never use a public proxy for a secret url.</p>
+        </div>
+        <div data-show="api">
+          <label>api_key <input name="calKey" type="text" spellcheck="false"></label>
+          <label>calendar_ids <input name="calIds" type="text" spellcheck="false" placeholder="you@gmail.com"></label>
+          <p class="dim">public calendars only. restrict the key to www.hantunzaw.dev/*</p>
+        </div>
+        <p class="prompt">[links] <span class="dim">name | url, one per line</span></p>
+        <label class="sr-only" for="cfg-links">Links</label>
+        <textarea id="cfg-links" name="links" rows="6" spellcheck="false"></textarea>
+        <div class="focus__row">
+          <button type="submit" class="key key--on">save</button>
+          <button type="button" class="key" data-close>cancel</button>
+          <span class="dim">stored in this browser only</span>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <!-- command line -->
+  <footer class="cmd">
+    <pre class="cmd__out" id="cmd-out" aria-live="polite"></pre>
+    <form class="cmd__line" id="cmd-form" autocomplete="off">
+      <label for="cmd-input"><span class="cmd__ps">han@hzos</span>:<span class="cmd__cwd">~</span>$</label>
+      <input id="cmd-input" type="text" spellcheck="false" autocapitalize="off" placeholder="type help, a command, or anything to search">
+      <kbd class="hide-sm">/</kbd>
+    </form>
+  </footer>
+
+  <noscript><p class="noscript">hzOS needs JavaScript to boot.</p></noscript>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script type="module" src="os.js"></script>
+</body>
+</html>

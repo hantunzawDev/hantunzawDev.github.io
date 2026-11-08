@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home · hantunzaw</title>
+  <meta name="description" content="Han's personal browser home: time, weather, today's agenda, focus timer and news.">
+  <meta name="theme-color" content="#07080a">
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="../../assets/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <!--
+    Credits (thank you):
+    - Weather: Open-Meteo (open-meteo.com), CC BY 4.0
+    - Reverse geocoding: BigDataCloud free client API
+    - News: Hacker News via Algolia, DEV Community API, GitHub Search API, Wikipedia "In the news" (CC BY-SA)
+    - Icons: Solar icon set by 480 Design, via Iconify (CC BY 4.0)
+    - 3D: three.js (MIT). Motion: GSAP (standard no-charge license)
+  -->
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body data-phase="night">
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="hantunzaw.dev home">hz<span>/home</span></a>
+    <p class="topbar__date" id="date">&nbsp;</p>
+    <div class="topbar__actions">
+      <button class="icon-btn" id="btn-refresh" type="button" aria-label="Refresh data"><iconify-icon icon="solar:refresh-linear" width="18"></iconify-icon></button>
+      <button class="icon-btn" id="btn-settings" type="button" aria-label="Open settings"><iconify-icon icon="solar:settings-linear" width="18"></iconify-icon></button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- LEFT: Today -->
+    <section class="panel today" aria-labelledby="today-h">
+      <div class="panel__head">
+        <h2 id="today-h">Today</h2>
+        <span class="panel__meta" id="today-meta"></span>
+      </div>
+
+      <ol class="agenda" id="agenda" aria-live="polite"></ol>
+
+      <div class="tasks">
+        <div class="panel__subhead">
+          <h3>Tasks</h3>
+          <span class="panel__meta" id="task-count"></span>
+        </div>
+        <form class="task-form" id="task-form" autocomplete="off">
+          <label class="sr-only" for="task-input">New task</label>
+          <input id="task-input" type="text" placeholder="Add a task, press Enter" maxlength="140">
+        </form>
+        <ul class="task-list" id="task-list"></ul>
+      </div>
+    </section>
+
+    <!-- CENTER: hero -->
+    <section class="hero" aria-label="Clock and focus">
+      <p class="greeting" id="greeting">Hello</p>
+      <time class="clock" id="clock" aria-live="off">--:--</time>
+      <figure class="quote" id="quote">
+        <blockquote id="quote-text">Loading a thought for today…</blockquote>
+        <figcaption>
+          <span id="quote-author"></span>
+          <button class="text-btn" id="quote-next" type="button" aria-label="Show another quote"><iconify-icon icon="solar:shuffle-linear" width="14"></iconify-icon></button>
+        </figcaption>
+      </figure>
+
+      <form class="search" action="https://www.google.com/search" method="get" role="search">
+        <iconify-icon icon="solar:magnifer-linear" width="18" aria-hidden="true"></iconify-icon>
+        <label class="sr-only" for="q">Search the web</label>
+        <input id="q" name="q" type="search" placeholder="Search the web" autocomplete="off">
+        <kbd aria-hidden="true">/</kbd>
+      </form>
+
+      <nav class="links" id="links" aria-label="Quick links"></nav>
+
+      <div class="hero__cards">
+        <article class="panel weather" aria-labelledby="wx-h">
+          <div class="panel__head">
+            <h2 id="wx-h"><span id="wx-place">Weather</span></h2>
+            <span class="panel__meta" id="wx-updated"></span>
+          </div>
+          <div class="weather__now">
+            <iconify-icon id="wx-icon" icon="solar:cloud-linear" width="36" aria-hidden="true"></iconify-icon>
+            <p class="weather__temp"><span id="wx-temp">--</span><sup>°</sup></p>
+            <p class="weather__range"><span id="wx-desc">-</span><span id="wx-hilo"></span></p>
+          </div>
+          <p class="weather__guess" id="wx-guess">Reading the sky…</p>
+          <svg class="spark" id="wx-spark" viewBox="0 0 240 48" preserveAspectRatio="none" role="img" aria-label="Temperature and rain chance for the next 12 hours"></svg>
+          <div class="spark__axis" id="wx-axis" aria-hidden="true"></div>
+        </article>
+
+        <article class="panel focus" aria-labelledby="focus-h">
+          <div class="panel__head">
+            <h2 id="focus-h">Focus</h2>
+            <span class="panel__meta" id="focus-count">0 today</span>
+          </div>
+          <div class="focus__ring">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="ring-bg" cx="60" cy="60" r="52"/>
+              <circle class="ring-fg" id="focus-ring" cx="60" cy="60" r="52"/>
+            </svg>
+            <p class="focus__time" id="focus-time" role="timer" aria-live="off">25:00</p>
+            <p class="focus__mode" id="focus-mode">Focus</p>
+          </div>
+          <div class="focus__controls">
+            <button class="btn btn--primary" id="focus-start" type="button">Start</button>
+            <button class="btn" id="focus-reset" type="button" aria-label="Reset timer"><iconify-icon icon="solar:restart-linear" width="16"></iconify-icon></button>
+            <div class="seg" role="radiogroup" aria-label="Session length">
+              <button type="button" role="radio" aria-checked="true" data-min="25">25</button>
+              <button type="button" role="radio" aria-checked="false" data-min="50">50</button>
+              <button type="button" role="radio" aria-checked="false" data-min="5">5</button>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- RIGHT: news -->
+    <section class="panel news" aria-labelledby="news-h">
+      <div class="panel__head">
+        <h2 id="news-h">Reading</h2>
+        <span class="panel__meta" id="news-meta"></span>
+      </div>
+      <div class="tabs" role="tablist" aria-label="News sources">
+        <button role="tab" id="tab-hn" aria-selected="true" aria-controls="news-list" data-src="hn">Hacker News</button>
+        <button role="tab" id="tab-dev" aria-selected="false" aria-controls="news-list" data-src="dev" tabindex="-1">DEV</button>
+        <button role="tab" id="tab-gh" aria-selected="false" aria-controls="news-list" data-src="gh" tabindex="-1">GitHub</button>
+        <button role="tab" id="tab-world" aria-selected="false" aria-controls="news-list" data-src="world" tabindex="-1">World</button>
+      </div>
+      <ol class="news-list" id="news-list" role="tabpanel" aria-labelledby="tab-hn" aria-live="polite"></ol>
+    </section>
+  </main>
+
+  <!-- Settings -->
+  <dialog class="settings" id="settings" aria-labelledby="settings-h">
+    <form method="dialog" id="settings-form">
+      <header>
+        <h2 id="settings-h">Settings</h2>
+        <button class="icon-btn" value="cancel" aria-label="Close settings"><iconify-icon icon="solar:close-circle-linear" width="20"></iconify-icon></button>
+      </header>
+
+      <fieldset>
+        <legend>You</legend>
+        <label>Name <input name="name" type="text" maxlength="40"></label>
+        <label>Fallback city <input name="city" type="text" maxlength="60" placeholder="Yangon"></label>
+        <label class="row"><input name="h24" type="checkbox"> 24-hour clock</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Google Calendar (read-only)</legend>
+        <label>Mode
+          <select name="calMode">
+            <option value="off">Off</option>
+            <option value="api">Google API key + calendar ID</option>
+            <option value="ical">Secret iCal URL via my proxy</option>
+          </select>
+        </label>
+        <div data-show="api">
+          <label>API key <input name="calKey" type="text" autocomplete="off" spellcheck="false"></label>
+          <label>Calendar IDs <input name="calIds" type="text" placeholder="you@gmail.com, other@group.calendar.google.com" spellcheck="false"></label>
+          <p class="hint">Works for calendars set to public. Restrict the key to <code>www.hantunzaw.dev/*</code> in Google Cloud.</p>
+        </div>
+        <div data-show="ical">
+          <label>Secret iCal URL <input name="icalUrl" type="url" spellcheck="false" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></label>
+          <label>Proxy URL <input name="proxy" type="url" spellcheck="false" placeholder="https://ical-proxy.you.workers.dev/?url="></label>
+          <p class="hint">Use your own proxy (see <code>home/worker/ical-proxy.js</code>). Your secret URL passes through it, so don't use a public one.</p>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Quick links</legend>
+        <label>One per line: <code>Name | https://url</code>
+          <textarea name="links" rows="6" spellcheck="false"></textarea>
+        </label>
+      </fieldset>
+
+      <p class="hint">Settings live only in this browser.</p>
+      <footer>
+        <button class="btn" value="cancel">Cancel</button>
+        <button class="btn btn--primary" value="save" id="settings-save">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <noscript><p class="noscript">This home page needs JavaScript for the clock, weather and news.</p></noscript>
+
+  <script src="https://cdn.jsdelivr.net/npm/iconify-icon@2.1.0/dist/iconify-icon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
