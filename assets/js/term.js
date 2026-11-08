@@ -5,7 +5,7 @@ import { PORTRAIT } from "./portrait.js";
 /* ---------- content ---------- */
 const ME = {
   name: "Han Tun Zaw",
-  role: "Senior Flutter Developer",
+  role: "Software Engineer",
   base: "Bangkok, TH",
   tz: "Asia/Bangkok",
   since: new Date(2019, 7, 1), // first dev job, Aug 2019
@@ -64,7 +64,7 @@ function fmtTime(d, opts) {
 function uptime() {
   const now = new Date();
   let m = (now.getFullYear() - ME.since.getFullYear()) * 12 + now.getMonth() - ME.since.getMonth();
-  return `${Math.floor(m / 12)}y ${m % 12}mo shipping apps`;
+  return `${Math.floor(m / 12)}y ${m % 12}mo building software`;
 }
 
 /* ---------- theme ---------- */
