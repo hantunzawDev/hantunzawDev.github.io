@@ -12,13 +12,14 @@ const ME = {
   email: "dev.hantunzaw@gmail.com",
   github: "https://github.com/hantunzawDev",
   linkedin: "https://www.linkedin.com/in/hantunzaw/",
-  resume: "HanTunZawResume.pdf",
+  resume: "Resume-HanTunZaw.pdf",
   about: [
     "I'm Han, a mobile developer based in Bangkok.",
     "I build Flutter apps for Android and iOS, and I've done my share of full-stack web along the way: WordPress, WooCommerce, Odoo and Drupal.",
     "Most of my work is B2B and under NDA, so the details live in conversations rather than public repos. Ask me about payment flows, screenshot protection, or wiring Flutter into an ERP.",
   ],
   work: [
+    { when: "Aug 2023 - Present", co: "Orange Cap", role: "Software Engineer", did: "TAGTHAi travel and merchant apps: passes, tickets, QR access and payment confirmation." },
     { when: "Jan 2023 - May 2023", co: "Ethical Digit", role: "Senior Flutter Developer", did: "E-book app with in-app purchases, screenshot protection and one-device login." },
     { when: "Jan 2022 - Jul 2023", co: "Asaygo", role: "Senior Flutter Developer", did: "Redesigned the app in Figma, then rebuilt it: responsive layouts, third-party APIs, code reviews." },
     { when: "Nov 2021 - Jan 2022", co: "eWhale Myanmar", role: "Flutter Developer", did: "Flutter e-commerce app on top of WooCommerce, with payment gateways." },
