@@ -27,6 +27,7 @@
 }
 :root[data-theme="amber"] { --acc: #ffb000; --amber: #ffe08a; --line-hi: #5a4316; --line: #33270e; --bar: #17120a; --win: #110d07; --bg: #0b0905; --text: #f3e6cc; --muted: #c3ad86; --dim: #95835f; --glow: 0 0 8px rgba(255, 176, 0, 0.35); --glow-soft: 0 0 6px rgba(255, 176, 0, 0.22); }
 :root[data-theme="ice"] { --acc: #7fdbff; --amber: #ffc46b; --line-hi: #1f4a5c; --line: #142c36; --bar: #0b1519; --win: #081014; --bg: #060b0d; --text: #dcf1f8; --muted: #9cbcc8; --dim: #6f8f9b; --glow: 0 0 8px rgba(127, 219, 255, 0.35); --glow-soft: 0 0 6px rgba(127, 219, 255, 0.22); }
+:root[data-theme="purple"] { --acc: #c792ff; --acc-ink: #140d1f; --amber: #ffc46b; --line-hi: #4b3a63; --line: #2c2338; --bar: #16121e; --win: #0e0b13; --bg: #0b0910; --text: #ece4f7; --muted: #b3a5c8; --dim: #8a7ca0; --glow: 0 0 8px rgba(199, 146, 255, 0.35); --glow-soft: 0 0 6px rgba(199, 146, 255, 0.22); }
 
 *, *::before, *::after { box-sizing: border-box; }
 html, body { height: 100%; }

@@ -14,7 +14,7 @@ Drag a window by its title bar, resize it from the bottom-right corner, and doub
 | `todo.txt` | Local tasks. Tasks finished on an earlier day are cleared. |
 | `notes.md` | Scratchpad, saved as you type |
 | `focus.exe` | Pomodoro timer: 25, 50 or 5 minutes, with a chime and a count of sessions today |
-| `world.3d` | three.js dotted globe showing your location and the real day/night line |
+| `world.map` | Dot-matrix world map with your location, the live day/night line and where the sun is overhead |
 | `fortune` | A quote picked for the time and day, with a hint like "morning · monday". `again` picks another. |
 | `feed.rss` | Hacker News, DEV, GitHub (top new repos this week) and Wikipedia news |
 | `game.exe` | Snake and a typing test |
@@ -50,7 +50,7 @@ Tags in the same group mean "or", different groups mean "and". `Ship it. -- Me @
 
 ## Themes
 
-`theme lime` (default), `theme amber`, `theme ice`, or `theme paper` (light). All text meets WCAG AA contrast (4.5:1 or better).
+`theme lime` (default), `theme amber`, `theme ice`, `theme purple`, or `theme paper` (light). All text meets WCAG AA contrast (4.5:1 or better).
 
 ## Command line
 
@@ -88,7 +88,7 @@ system  open|close|max <app> · ls · layout reset · theme <name> · name|city 
 | `quotes.js` | Quote packs, tag matching and the rotation picker |
 | `games.js` | Snake and the typing test |
 | `fun.js` | cowsay, neofetch, 8ball, the matrix screen and the calculator |
-| `globe.js` | The 3D globe |
+| `map.js` | The world map: coastlines from Natural Earth, cached in the browser after the first load |
 
 ## Local preview
 

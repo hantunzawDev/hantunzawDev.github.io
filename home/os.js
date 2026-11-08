@@ -3,6 +3,7 @@ import {
   store, settings, saveSettings, links, pad, dayKey, hhmm, hourLabel, ago, isoWeek, spark, bar,
   currentQuote, fetchWeather, FEEDS, fetchFeed, getJSON,
 } from "./data.js";
+import { createMap, subsolar } from "./map.js";
 import { PACK_NAMES, ROTATIONS, parseLine, formatLine, contextLabel, slotKey } from "./quotes.js";
 import { snake, typer } from "./games.js";
 import { cowsay, neofetch, eightBall, HACK, TRAIN, matrix, calc } from "./fun.js";
@@ -24,15 +25,15 @@ const bootedAt = Date.now();
 /* =========================================================
    window manager: open/close, drag, resize, maximize
    ========================================================= */
-const APPS = ["clock", "wx", "todo", "notes", "focus", "globe", "fortune", "feed", "game", "config"];
-const FILES = { clock: "clock.app", wx: "wx.sh", todo: "todo.txt", notes: "notes.md", focus: "focus.exe", globe: "world.3d", fortune: "fortune", feed: "feed.rss", game: "game.exe", config: "config.ini" };
-const ALIAS = { world: "globe", weather: "wx", settings: "config", news: "feed", quote: "fortune", timer: "focus" };
+const APPS = ["clock", "wx", "todo", "notes", "focus", "map", "fortune", "feed", "game", "config"];
+const FILES = { clock: "clock.app", wx: "wx.sh", todo: "todo.txt", notes: "notes.md", focus: "focus.exe", map: "world.map", fortune: "fortune", feed: "feed.rss", game: "game.exe", config: "config.ini" };
+const ALIAS = { world: "map", globe: "map", weather: "wx", settings: "config", news: "feed", quote: "fortune", timer: "focus" };
 const appName = (a) => ALIAS[a] || a;
 // default layout as fractions of the desktop: x, y, w, h
 const DEFAULT_LAYOUT = {
-  clock:   [0.012, 0.025, 0.37, 0.40],
-  wx:      [0.392, 0.025, 0.21, 0.40],
-  globe:   [0.612, 0.025, 0.155, 0.40],
+  clock:   [0.012, 0.025, 0.30, 0.40],
+  wx:      [0.322, 0.025, 0.19, 0.40],
+  map:     [0.522, 0.025, 0.245, 0.40],
   feed:    [0.777, 0.025, 0.211, 0.95],
   todo:    [0.012, 0.455, 0.215, 0.52],
   notes:   [0.237, 0.455, 0.20, 0.52],
@@ -103,7 +104,7 @@ function toggleMax(app) {
 }
 function renderDock() {
   $("#dock").replaceChildren(...APPS.filter((a) => a !== "game").map((app) => {
-    const b = h("button", { type: "button", textContent: app === "globe" ? "world" : app });
+    const b = h("button", { type: "button", textContent: app });
     b.setAttribute("aria-pressed", String(!win(app).hidden));
     b.addEventListener("click", () => (win(app).hidden || !win(app).classList.contains("is-front") ? openApp(app) : closeApp(app)));
     return b;
@@ -223,6 +224,7 @@ function tick() {
     const time = `${hrs}:${pad(now.getMinutes())}`;
     $("#clock").textContent = time;
     $("#zen-time").textContent = time;
+    renderMapInfo();
     const slot = slotKey(settings.qRotation, now);
     if (slot && slot !== qSlot) { qSlot = slot; qSalt = 0; renderFortune(); }
     $("#clock").dateTime = now.toISOString();
@@ -250,9 +252,9 @@ function tick() {
 }
 
 /* =========================================================
-   wx.sh + world.3d
+   wx.sh + world.map
    ========================================================= */
-let globe = null;
+let worldMap = null;
 async function loadWx(force = false) {
   const box = $("#wx");
   try {
@@ -274,18 +276,28 @@ async function loadWx(force = false) {
       h("p", { className: "wx__guess", textContent: `> ${w.guess}` }),
     );
     $("#st-wx").textContent = `wx:${Math.round(w.temp)}° ${w.rainy ? "rain" : w.desc.split(" ").pop()}`;
-    globe?.setLocation(w.place.lat, w.place.lon);
-    const night = globe?.isNight(w.place.lat, w.place.lon);
-    const label = $("#globe-label");
-    label.replaceChildren(h("b", { textContent: `● ${w.place.name.toLowerCase()}` }), "\n",
-      `${Math.abs(w.place.lat).toFixed(2)}°${w.place.lat >= 0 ? "N" : "S"} ${Math.abs(w.place.lon).toFixed(2)}°${w.place.lon >= 0 ? "E" : "W"}\n${night ? "night side" : "day side"}`);
-    label.style.whiteSpace = "pre";
+    worldMap?.setLocation(w.place.lat, w.place.lon);
+    renderMapInfo(w);
     return w;
   } catch (err) {
     console.warn("wx", err);
     box.replaceChildren(h("p", { className: "prompt", textContent: "$ wx" }), h("p", { className: "dim", textContent: "error: weather unreachable. try `wx` again." }));
     return null;
   }
+}
+
+const fmtLat = (v) => `${Math.abs(v).toFixed(1)}°${v >= 0 ? "N" : "S"}`;
+const fmtLon = (v) => `${Math.abs(v).toFixed(1)}°${v >= 0 ? "E" : "W"}`;
+let lastPlace = null;
+function renderMapInfo(w = lastPlace) {
+  if (!w) return;
+  lastPlace = w;
+  const night = worldMap?.isNight(w.place.lat, w.place.lon);
+  const s = subsolar();
+  $("#map-info").replaceChildren(
+    h("b", { textContent: `● ${w.place.name.toLowerCase()}` }), ` ${fmtLat(w.place.lat)} ${fmtLon(w.place.lon)} · ${night ? "night" : "day"} side\n`,
+    `sun ↑${hhmm(w.sun.rise)} ↓${hhmm(w.sun.set)} · overhead at ${fmtLat(s.lat)} ${fmtLon(s.lon)}`,
+  );
 }
 
 /* =========================================================
@@ -509,13 +521,13 @@ let guess = null;
 /* =========================================================
    themes + config.ini
    ========================================================= */
-const THEMES = ["lime", "amber", "ice", "paper"];
+const THEMES = ["lime", "amber", "ice", "purple", "paper"];
 function applyTheme(name) {
   if (!THEMES.includes(name)) return false;
   if (name === "lime") delete document.body.dataset.theme; else document.body.dataset.theme = name;
   settings.theme = name;
   $('meta[name="theme-color"]').content = css("--bg") || "#0a0c08";
-  globe?.setColors(css("--lime"), css("--amber"));
+  worldMap?.setColors();
   return true;
 }
 const cfg = $("#config");
@@ -574,7 +586,7 @@ const HELP = {
   quotes: "quote [now] · quote add <text> -- <author> @tags · quote ls · quote rm <n> · quote rotate visit|30m|hourly|daily · quote pack <name> on|off · quote match on|off · quote tags",
   fun:    "neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee",
   games:  "snake · type · guess",
-  system: "open|close|max <app> · ls · layout reset · theme lime|amber|ice|paper · name|city <x> · 12h|24h · history · clear",
+  system: "open|close|max <app> · ls · layout reset · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
 };
 const go = (url) => { location.href = url; };
 const enc = encodeURIComponent;
@@ -937,11 +949,8 @@ async function start() {
   tick();
   selectFeed(feedSrc);
   setMode(store.get("mode", "desktop"));
-  import("./globe.js").then(({ createGlobe }) => {
-    globe = createGlobe($("#globe"));
-    globe?.setColors(css("--lime"), css("--amber"));
-    loadWx();
-  }).catch(() => loadWx());
+  worldMap = createMap($("#map"), $("#map-pin"));
+  loadWx();
 
   await boot();
   if (window.gsap && !reduce && !document.hidden && !small() && document.body.dataset.mode === "desktop") {

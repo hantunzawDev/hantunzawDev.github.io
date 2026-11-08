@@ -72,7 +72,7 @@ function uptime() {
 }
 
 /* ---------- theme ---------- */
-const THEMES = ["lime", "amber", "ice"];
+const THEMES = ["lime", "amber", "ice", "purple"];
 function setTheme(t) {
   if (!THEMES.includes(t)) return false;
   if (t === "lime") delete document.documentElement.dataset.theme;
@@ -149,7 +149,7 @@ const HELP = [
   ["about", "who I am"], ["work", "where I've worked"], ["education", "where I studied"], ["projects", "things I've shipped"], ["stack", "languages and tools"],
   ["contact", "how to reach me"], ["resume", "open my resume (PDF)"], ["email", "copy my email address"],
   ["github", "open GitHub"], ["linkedin", "open LinkedIn"], ["hzos", "my browser home page OS"],
-  ["ls · cat <file>", "browse the home dir"], ["theme lime|amber|ice", "change phosphor"],
+  ["ls · cat <file>", "browse the home dir"], ["theme lime|amber|ice|purple", "change phosphor"],
   ["banner", "redraw the portrait"], ["history · clear", "shell stuff"],
 ];
 

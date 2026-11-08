@@ -17,11 +17,9 @@
     Weather: Open-Meteo (CC BY 4.0) · Reverse geocoding: BigDataCloud
     Feeds: Hacker News via Algolia, DEV API, GitHub Search API, Wikipedia (CC BY-SA)
     define: Wiktionary (CC BY-SA) · joke: icanhazdadjoke.com
-    Fonts: Doto, Martian Mono (SIL OFL) · 3D: three.js (MIT) · Motion: GSAP
+    Map: Natural Earth via world-atlas, topojson-client (ISC)
+    Fonts: Doto, Martian Mono (SIL OFL) · Motion: GSAP
   -->
-  <script type="importmap">
-    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
-  </script>
 </head>
 <body data-mode="desktop">
   <div class="crt" aria-hidden="true"></div>
@@ -110,11 +108,14 @@
       </div>
     </section>
 
-    <section class="win" data-app="globe" aria-label="World view">
-      <header class="win__bar"><span class="win__title">world.3d</span><span class="win__ctrl"><button type="button" data-close aria-label="Close world view">x</button></span></header>
-      <div class="win__body globe">
-        <canvas id="globe" aria-hidden="true"></canvas>
-        <p class="globe__label" id="globe-label">locating…</p>
+    <section class="win" data-app="map" aria-label="World map">
+      <header class="win__bar"><span class="win__title">world.map</span><span class="win__ctrl"><button type="button" data-close aria-label="Close world map">x</button></span></header>
+      <div class="win__body map">
+        <div class="map__frame">
+          <canvas id="map" role="img" aria-label="World map with the day and night line and your location"></canvas>
+          <span class="map__pin" id="map-pin" hidden></span>
+        </div>
+        <p class="map__info" id="map-info">locating…</p>
       </div>
     </section>
 
@@ -157,6 +158,7 @@
             <option value="lime">lime phosphor</option>
             <option value="amber">amber terminal</option>
             <option value="ice">ice blue</option>
+            <option value="purple">purple haze</option>
             <option value="paper">paper white</option>
           </select>
         </label>
