@@ -15,10 +15,10 @@ Drag a window by its title bar, resize it from the bottom-right corner, and doub
 | `notes.md` | Scratchpad, saved as you type |
 | `focus.exe` | Pomodoro timer: 25, 50 or 5 minutes, with a chime and a count of sessions today |
 | `world.3d` | three.js dotted globe showing your location and the real day/night line |
-| `fortune` | Quote of the day. `again` picks another. |
+| `fortune` | A quote picked for the time and day, with a hint like "morning · monday". `again` picks another. |
 | `feed.rss` | Hacker News, DEV, GitHub (top new repos this week) and Wikipedia news |
 | `game.exe` | Snake and a typing test |
-| `config.ini` | Name, fallback city, 12h/24h clock, theme, links |
+| `config.ini` | Name, fallback city, 12h/24h clock, theme, quotes, links |
 
 ## Modes
 
@@ -27,6 +27,26 @@ Switch modes from the menubar or with `mode <name>`. Esc returns to desktop.
 - **desktop:** all the windows.
 - **focus:** only a full-screen pomodoro, showing the task you're working on (`next task` cycles through open todos).
 - **zen:** only a big clock, the date and the quote of the day.
+
+## Quotes
+
+The fortune window and zen mode share one picker. Set it up in `config.ini` → `[quotes]` or with `quote` commands.
+
+- **Packs:** `dev`, `stoic`, `motivation` and `rest`, each on or off.
+- **Your own quotes:** one per line, as `text -- author @tags`. Lines starting with `#` are ignored.
+- **Rotation:** every visit, every 30 min, hourly (default) or daily. Within a slot the quote stays the same; `again` shuffles it.
+- **Time and day matching:** when on, a quote tagged for right now is picked about 70% of the time, and a general (untagged) quote the rest. Quotes tagged for another time never show.
+
+Tags:
+
+| group | tags |
+|---|---|
+| time of day | `@morning` (5–12h) `@afternoon` (12–17h) `@evening` (17–22h) `@night` (22–5h) |
+| day | `@mon` … `@sun`, `@weekday`, `@weekend` |
+| date | `@12-25` (month-day) |
+| hours | `@9-12h` (`@22-6h` wraps past midnight) |
+
+Tags in the same group mean "or", different groups mean "and". `Ship it. -- Me @fri @evening` shows on Friday evenings; `Rest. -- Me @sat @sun` shows on either weekend day.
 
 ## Themes
 
@@ -41,6 +61,7 @@ todo    t <task> · done <n> · rm <n> · note <text> · cat todo.txt|notes.md
 focus   f [min] · pause · reset · mode desktop|focus|zen · timer 10m [label] · timers
 info    wx · news hn|dev|gh|world · define <word> · wiki <topic> · date · uptime
 tools   = <math> · pass [len] · uuid · b64 <text> · unb64 <text> · g|yt|ddg|gh <query> · <link name>
+quotes  quote [now] · quote add <text> -- <author> @tags · quote ls · quote rm <n> · quote rotate visit|30m|hourly|daily · quote pack <name> on|off · quote match on|off · quote tags
 fun     neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee
 games   snake · type · guess
 system  open|close|max <app> · ls · layout reset · theme <name> · name|city <x> · 12h|24h · history · clear
@@ -50,6 +71,7 @@ system  open|close|max <app> · ls · layout reset · theme <name> · name|city 
 - `pass` and `uuid` copy their result to the clipboard.
 - `timer 10m tea` counts down in the menubar and chimes when time is up.
 - `matrix` runs until you press a key or click.
+- `quote now` shows the current quote and why it was picked.
 
 ## Make it your browser's home page
 
@@ -62,7 +84,8 @@ system  open|close|max <app> · ls · layout reset · theme <name> · name|city 
 | file | contents |
 |---|---|
 | `index.html`, `os.css`, `os.js` | The shell: window manager, modes, apps and command line |
-| `data.js` | Weather, feeds, quotes and storage |
+| `data.js` | Weather, feeds, settings and storage |
+| `quotes.js` | Quote packs, tag matching and the rotation picker |
 | `games.js` | Snake and the typing test |
 | `fun.js` | cowsay, neofetch, 8ball, the matrix screen and the calculator |
 | `globe.js` | The 3D globe |

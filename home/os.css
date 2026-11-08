@@ -189,6 +189,7 @@ pre { font-family: inherit; white-space: pre-wrap; }
 
 /* fortune */
 .fortune { display: flex; flex-direction: column; gap: 8px; }
+.fortune__ctx { color: var(--dim); text-shadow: none; font-size: 11px; margin-left: 6px; }
 .fortune blockquote { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text); text-wrap: pretty; }
 .fortune__by { color: var(--muted); display: flex; align-items: center; gap: 10px; justify-content: space-between; }
 
@@ -210,7 +211,11 @@ pre { font-family: inherit; white-space: pre-wrap; }
 /* config */
 .config { display: grid; gap: 8px; align-content: start; }
 .config label { display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: center; color: var(--muted); }
-.config label.row { display: flex; }
+.config label.row { display: flex; align-items: center; gap: 8px; }
+.config input[type="checkbox"] { flex: none; margin: 0; accent-color: var(--lime); }
+.config label.config__stack { display: block; }
+.config__packs { border: 1px solid var(--line); margin: 0; padding: 6px 10px 8px; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.config__packs legend { color: var(--muted); padding: 0 4px; }
 .config input[type="text"], .config input[type="url"], .config select, .config textarea { border-bottom: 1px solid var(--line-hi); padding: 4px 0; }
 .config select { background: var(--win); }
 .config textarea { border: 1px solid var(--line-hi); padding: 6px; resize: vertical; }

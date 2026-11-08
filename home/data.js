@@ -18,7 +18,10 @@ export const DEFAULT_LINKS = [
 ].join("\n");
 
 export const settings = Object.assign(
-  { name: "Han", city: "Yangon", h24: true, theme: "lime", links: DEFAULT_LINKS },
+  {
+    name: "Han", city: "Yangon", h24: true, theme: "lime", links: DEFAULT_LINKS,
+    qRotation: "hourly", qMatch: true, qp_dev: true, qp_stoic: true, qp_motivation: true, qp_rest: true, qCustom: "",
+  },
   store.get("settings", {}),
 );
 for (const k of ["calMode", "calKey", "calIds", "icalUrl", "proxy"]) delete settings[k];
@@ -82,36 +85,18 @@ export async function cached(key, ttlMin, loader, force = false) {
   }
 }
 
-/* ---------- quotes (unix fortune style) ---------- */
-export const QUOTES = [
-  ["Simplicity is prerequisite for reliability.", "Edsger W. Dijkstra"],
-  ["Make it work, make it right, make it fast.", "Kent Beck"],
-  ["The best way to predict the future is to invent it.", "Alan Kay"],
-  ["Programs must be written for people to read, and only incidentally for machines to execute.", "Abelson & Sussman"],
-  ["Well begun is half done.", "Aristotle"],
-  ["Nothing will work unless you do.", "Maya Angelou"],
-  ["You do not rise to the level of your goals. You fall to the level of your systems.", "James Clear"],
-  ["Every action you take is a vote for the type of person you wish to become.", "James Clear"],
-  ["Talk is cheap. Show me the code.", "Linus Torvalds"],
-  ["First, solve the problem. Then, write the code.", "John Johnson"],
-  ["The impediment to action advances action. What stands in the way becomes the way.", "Marcus Aurelius"],
-  ["Waste no more time arguing what a good man should be. Be one.", "Marcus Aurelius"],
-  ["We suffer more often in imagination than in reality.", "Seneca"],
-  ["The journey of a thousand miles begins with one step.", "Lao Tzu"],
-  ["Stay hungry. Stay foolish.", "Whole Earth Catalog"],
-  ["Real artists ship.", "Steve Jobs"],
-  ["If you want to go fast, go alone. If you want to go far, go together.", "Proverb"],
-  ["Discipline equals freedom.", "Jocko Willink"],
-  ["Focus is a matter of deciding what things you're not going to do.", "John Carmack"],
-  ["Clarity about what matters provides clarity about what does not.", "Cal Newport"],
-  ["Perfection is achieved not when there is nothing more to add, but when there is nothing left to take away.", "Antoine de Saint-Exupéry"],
-  ["Small deeds done are better than great deeds planned.", "Peter Marshall"],
-  ["Energy and persistence conquer all things.", "Benjamin Franklin"],
-  ["Simple things should be simple, complex things should be possible.", "Alan Kay"],
-  ["It is not that we have a short time to live, but that we waste a lot of it.", "Seneca"],
-];
-export function dailyQuoteIndex(now = new Date()) {
-  return Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 864e5) % QUOTES.length;
+/* ---------- quotes: see quotes.js ---------- */
+import { pick as pickQuote, PACK_NAMES } from "./quotes.js";
+export { QUOTES } from "./quotes.js";
+// the quote for now, from the user's quote settings; salt > 0 asks for a different one in the same slot
+export function currentQuote(now = new Date(), salt = 0) {
+  return pickQuote(now, {
+    rotation: settings.qRotation,
+    match: settings.qMatch,
+    packs: PACK_NAMES.filter((p) => settings["qp_" + p]),
+    custom: settings.qCustom,
+    salt,
+  });
 }
 
 /* ---------- weather ---------- */

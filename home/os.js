@@ -1,8 +1,9 @@
 // hzOS shell: window manager, modes, apps, command line.
 import {
   store, settings, saveSettings, links, pad, dayKey, hhmm, hourLabel, ago, isoWeek, spark, bar,
-  QUOTES, dailyQuoteIndex, fetchWeather, FEEDS, fetchFeed, getJSON,
+  currentQuote, fetchWeather, FEEDS, fetchFeed, getJSON,
 } from "./data.js";
+import { PACK_NAMES, ROTATIONS, parseLine, formatLine, contextLabel, slotKey } from "./quotes.js";
 import { snake, typer } from "./games.js";
 import { cowsay, neofetch, eightBall, HACK, TRAIN, matrix, calc } from "./fun.js";
 
@@ -194,8 +195,7 @@ function renderStageTask() {
 }
 $("#stage-next-task").addEventListener("click", () => { stageTask++; renderStageTask(); });
 function renderZen() {
-  const [text, by] = QUOTES[qi];
-  $("#zen-quote").textContent = `${text}  -- ${by}`;
+  if (quote) $("#zen-quote").textContent = `${quote.text}  -- ${quote.by}`;
 }
 
 /* =========================================================
@@ -223,6 +223,8 @@ function tick() {
     const time = `${hrs}:${pad(now.getMinutes())}`;
     $("#clock").textContent = time;
     $("#zen-time").textContent = time;
+    const slot = slotKey(settings.qRotation, now);
+    if (slot && slot !== qSlot) { qSlot = slot; qSalt = 0; renderFortune(); }
     $("#clock").dateTime = now.toISOString();
     $("#hello").textContent = `${greeting(now.getHours())}, ${(settings.name || "friend").toLowerCase()}.`;
     const doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 864e5);
@@ -428,16 +430,20 @@ function renderTimers() {
 }
 
 /* =========================================================
-   fortune
+   fortune (quote engine lives in quotes.js)
    ========================================================= */
-let qi = dailyQuoteIndex();
-function renderFortune(random = false) {
-  if (random) { let n; do n = Math.floor(Math.random() * QUOTES.length); while (n === qi); qi = n; } else qi = dailyQuoteIndex();
-  const [text, by] = QUOTES[qi];
+let quote = null, why = "", qSalt = 0, qSlot = slotKey(settings.qRotation, new Date());
+function renderFortune(again = false) {
+  const prev = quote?.text;
+  let r = currentQuote(new Date(), again ? ++qSalt : qSalt);
+  // "again" should actually change the quote when the pool allows it
+  for (let i = 0; again && r.quote.text === prev && i < 6; i++) r = currentQuote(new Date(), ++qSalt);
+  quote = r.quote; why = r.why;
   const el = $("#fortune-text");
-  $("#fortune-by").textContent = `  -- ${by}`;
-  if (random && !reduce) typeOut(el, text); else el.textContent = text;
-  if (document.body.dataset.mode === "zen") renderZen();
+  $("#fortune-by").textContent = `  -- ${quote.by}`;
+  $("#fortune-ctx").textContent = settings.qMatch ? contextLabel(new Date()) : "";
+  if (again && !reduce) typeOut(el, quote.text); else { clearInterval(el._t); el.textContent = quote.text; }
+  renderZen();
 }
 function typeOut(el, text) {
   clearInterval(el._t);
@@ -446,6 +452,8 @@ function typeOut(el, text) {
   el._t = setInterval(() => { i += 2; el.textContent = text.slice(0, i); if (i >= text.length) clearInterval(el._t); }, 16);
 }
 $("#fortune-next").addEventListener("click", () => renderFortune(true));
+// custom quotes live in settings.qCustom, one per line
+const customLines = () => (settings.qCustom || "").split("\n").filter((l) => parseLine(l));
 
 /* =========================================================
    feed.rss
@@ -526,6 +534,7 @@ cfg.addEventListener("submit", (e) => {
   }
   saveSettings();
   applyTheme(settings.theme);
+  qSlot = slotKey(settings.qRotation, new Date()); qSalt = 0; renderFortune();
   closeApp("config");
   log("config.ini saved.", "ok");
   lastMinute = -1;
@@ -562,6 +571,7 @@ const HELP = {
   focus:  "f [min] · pause · reset · mode desktop|focus|zen · timer 10m [label] · timers",
   info:   "wx · news hn|dev|gh|world · define <word> · wiki <topic> · date · uptime",
   tools:  "= <math> · pass [len] · uuid · b64 <text> · unb64 <text> · g|yt|ddg|gh <query> · <link name>",
+  quotes: "quote [now] · quote add <text> -- <author> @tags · quote ls · quote rm <n> · quote rotate visit|30m|hourly|daily · quote pack <name> on|off · quote match on|off · quote tags",
   fun:    "neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee",
   games:  "snake · type · guess",
   system: "open|close|max <app> · ls · layout reset · theme lime|amber|ice|paper · name|city <x> · 12h|24h · history · clear",
@@ -594,7 +604,7 @@ const COMMANDS = {
   cat: (a) => {
     if (/todo/.test(a)) return todos.length ? todos.forEach((t, i) => log(`${pad(i + 1)} ${t.done ? "[x]" : "[ ]"} ${t.text}`)) : log("todo.txt is empty.");
     if (/notes/.test(a)) return log(notesEl.value || "notes.md is empty.");
-    if (/config/.test(a)) return log(`name=${settings.name}\ncity=${settings.city}\ntheme=${settings.theme}\nclock=${settings.h24 ? "24h" : "12h"}`);
+    if (/config/.test(a)) return log(`name=${settings.name}\ncity=${settings.city}\ntheme=${settings.theme}\nclock=${settings.h24 ? "24h" : "12h"}\nquotes.rotate=${settings.qRotation}\nquotes.match=${settings.qMatch ? "on" : "off"}\nquotes.packs=${PACK_NAMES.filter((p) => settings["qp_" + p]).join(",") || "none"}\nquotes.custom=${customLines().length}`);
     log(`cat: ${a || "?"}: no such file. try: ls`, "err");
   },
 
@@ -681,8 +691,10 @@ const COMMANDS = {
       snake: `best ${store.get("snake.best", 0)}`, typing: `best ${store.get("typer.best", 0)} wpm`,
     }));
   },
-  cowsay: (a) => art(cowsay(a || QUOTES[qi][0])),
-  fortune: () => { renderFortune(true); log(`${QUOTES[qi][0]}  -- ${QUOTES[qi][1]}`); },
+  cowsay: (a) => art(cowsay(a || quote?.text || "moo.")),
+  fortune: () => { renderFortune(true); log(`${quote.text}  -- ${quote.by}`); },
+  quote: (a) => quoteCmd(a),
+  quotes: (a) => quoteCmd(a),
   joke: async () => {
     try { const j = await getJSON("https://icanhazdadjoke.com/", { headers: { Accept: "application/json" } }); log(j.joke); }
     catch { log("joke: the joke server is not laughing right now.", "err"); }
@@ -764,6 +776,61 @@ function guessTry(v) {
   } else log(`guess: ${n} is too ${n < guess.n ? "low" : "high"}.`);
 }
 
+function quoteCmd(a = "") {
+  const [sub = "now", ...rest] = a.trim().split(/\s+/);
+  const arg = rest.join(" ");
+  const save = () => { saveSettings(); renderFortune(); };
+  switch (sub) {
+    case "now": case "":
+      log(`${quote.text}  -- ${quote.by}`, "ok");
+      log(`why: ${why}${quote.tags?.length ? ` · tags ${quote.tags.map((x) => "@" + x).join(" ")}` : ""} · source ${quote.source || "?"}`);
+      return;
+    case "add": {
+      const q = parseLine(arg);
+      if (!q || !/\s--\s/.test(arg)) return log("usage: quote add Ship it. -- Han @fri @evening", "err");
+      settings.qCustom = [...customLines(), formatLine(q)].join("\n");
+      qSalt = 0; save();
+      return log(`quote: added #${customLines().length}${q.tags.length ? ` (shows ${q.tags.map((x) => "@" + x).join(" ")})` : " (any time)"}`, "ok");
+    }
+    case "ls": case "list": {
+      const lines = customLines();
+      if (!lines.length) return log("no custom quotes yet. quote add <text> -- <author> @tags");
+      return lines.forEach((l, i) => log(`${pad(i + 1)}  ${l}`));
+    }
+    case "rm": {
+      const lines = customLines();
+      const n = +arg;
+      if (!n || !lines[n - 1]) return log("usage: quote rm <n> · see quote ls", "err");
+      const [gone] = lines.splice(n - 1, 1);
+      settings.qCustom = lines.join("\n"); save();
+      return log(`quote: removed "${parseLine(gone).text}"`, "ok");
+    }
+    case "rotate":
+      if (!ROTATIONS[arg]) return log(`usage: quote rotate ${Object.keys(ROTATIONS).join("|")} · now ${settings.qRotation}`, "err");
+      settings.qRotation = arg; qSlot = slotKey(arg, new Date()); qSalt = 0; save();
+      return log(`quote: rotates ${ROTATIONS[arg]}`, "ok");
+    case "pack": {
+      const [name, state] = rest;
+      if (!PACK_NAMES.includes(name) || !["on", "off"].includes(state)) {
+        return log(`packs: ${PACK_NAMES.map((p) => `${p}:${settings["qp_" + p] ? "on" : "off"}`).join("  ")} · quote pack <name> on|off`);
+      }
+      settings["qp_" + name] = state === "on"; save();
+      return log(`quote: pack ${name} ${state}`, "ok");
+    }
+    case "match":
+      if (!["on", "off"].includes(arg)) return log(`usage: quote match on|off · now ${settings.qMatch ? "on" : "off"}`, "err");
+      settings.qMatch = arg === "on"; save();
+      return log(`quote: time & day matching ${arg}`, "ok");
+    case "tags":
+      log("time   @morning @afternoon @evening @night");
+      log("day    @mon @tue @wed @thu @fri @sat @sun @weekday @weekend");
+      log("date   @12-25   hours  @9-12h (22-6h wraps midnight)");
+      return log(`same group = or, different groups = and. right now: ${contextLabel(new Date())}`);
+    default:
+      log("usage: quote [now|add|ls|rm|rotate|pack|match|tags]", "err");
+  }
+}
+
 function run(raw) {
   const line = raw.trim();
   if (!line) return;
@@ -793,6 +860,9 @@ input.addEventListener("keydown", (e) => {
     else if (c === "mode") { pool = MODES; prefix = c + " "; }
     else if (c === "news") { pool = Object.keys(FEEDS); prefix = c + " "; }
     else if (c === "help") { pool = Object.keys(HELP); prefix = c + " "; }
+    else if (c === "quote" && r.length === 1) { pool = ["now", "add", "ls", "rm", "rotate", "pack", "match", "tags"]; prefix = c + " "; }
+    else if (c === "quote" && r[0] === "rotate") { pool = Object.keys(ROTATIONS); prefix = "quote rotate "; r.shift(); }
+    else if (c === "quote" && r[0] === "pack") { pool = PACK_NAMES; prefix = "quote pack "; r.shift(); }
     if (!pool) return;
     const word = (r.length ? r.join(" ") : c).toLowerCase();
     const hits = pool.filter((p) => p.startsWith(word));

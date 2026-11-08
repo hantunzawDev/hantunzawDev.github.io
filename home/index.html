@@ -121,7 +121,7 @@
     <section class="win" data-app="fortune" aria-label="Quote">
       <header class="win__bar"><span class="win__title">fortune</span><span class="win__ctrl"><button type="button" data-close aria-label="Close quote">x</button></span></header>
       <div class="win__body fortune">
-        <p class="prompt">$ fortune</p>
+        <p class="prompt">$ fortune <span class="fortune__ctx" id="fortune-ctx"></span></p>
         <blockquote id="fortune-text"></blockquote>
         <p class="fortune__by"><span id="fortune-by"></span> <button type="button" class="key" id="fortune-next">again</button></p>
       </div>
@@ -160,6 +160,25 @@
             <option value="paper">paper white</option>
           </select>
         </label>
+        <p class="prompt">[quotes]</p>
+        <label>rotate
+          <select name="qRotation">
+            <option value="visit">every visit</option>
+            <option value="30m">every 30 min</option>
+            <option value="hourly">hourly</option>
+            <option value="daily">daily</option>
+          </select>
+        </label>
+        <label class="row"><input name="qMatch" type="checkbox"> match time &amp; day (@morning, @mon, @weekend…)</label>
+        <fieldset class="config__packs">
+          <legend>packs</legend>
+          <label class="row"><input name="qp_dev" type="checkbox"> dev</label>
+          <label class="row"><input name="qp_stoic" type="checkbox"> stoic</label>
+          <label class="row"><input name="qp_motivation" type="checkbox"> motivation</label>
+          <label class="row"><input name="qp_rest" type="checkbox"> rest</label>
+        </fieldset>
+        <label class="config__stack" for="cfg-quotes">my quotes <span class="dim">one per line: text -- author @tags</span></label>
+        <textarea id="cfg-quotes" name="qCustom" rows="5" spellcheck="false" placeholder="Ship small, ship daily. -- Han @fri @evening&#10;Coffee first. -- Me @morning @weekday&#10;tags: @morning @afternoon @evening @night · @mon..@sun · @weekday @weekend · @12-25 · @9-12h"></textarea>
         <p class="prompt">[links] <span class="dim">name | url, one per line</span></p>
         <label class="sr-only" for="cfg-links">Links</label>
         <textarea id="cfg-links" name="links" rows="6" spellcheck="false"></textarea>
