@@ -159,11 +159,17 @@ function enableWindow(el) {
   el.addEventListener("focusin", () => front(app));
   $$("[data-close]", el).forEach((b) => b.addEventListener("click", () => closeApp(app)));
 }
+// put every window back to its default spot and reopen the default set
 function resetLayout() {
   store.del("layout.v2");
   Object.assign(layout, DEFAULT_LAYOUT);
+  desktop.classList.add("is-resetting");
   APPS.forEach((a) => { win(a).classList.remove("is-max"); applyLayout(a); });
+  APPS.filter((a) => !["config", "game"].includes(a)).forEach((a) => openApp(a, { focus: false }));
+  clearTimeout(resetLayout.t);
+  resetLayout.t = setTimeout(() => desktop.classList.remove("is-resetting"), 400);
 }
+$("#layout-reset").addEventListener("click", () => { resetLayout(); log("layout: reset.", "ok"); });
 
 /* =========================================================
    modes: desktop · focus · zen
@@ -765,7 +771,7 @@ const COMMANDS = {
   close: (a) => (closeApp(a) ? log(`close ${a}`) : log(`no app "${a}"`, "err")),
   max: (a) => (toggleMax(a || $(".win.is-front")?.dataset.app) ? log(`max ${a || "front window"}`) : log("usage: max <app>", "err")),
   ls: () => log(APPS.map((a) => FILES[a] + (win(a).hidden ? "" : "*")).join("  ") + "\n(* = open)"),
-  layout: (a) => (a === "reset" ? (resetLayout(), APPS.filter((x) => !["config", "game"].includes(x)).forEach((x) => openApp(x, { focus: false })), log("layout: reset.", "ok")) : log("usage: layout reset", "err")),
+  layout: (a) => (a === "reset" ? (resetLayout(), log("layout: reset.", "ok")) : log("usage: layout reset", "err")),
   theme: (a) => (applyTheme(a) ? (saveSettings(), log(`theme: ${a}`, "ok")) : log(`usage: theme ${THEMES.join("|")}`, "err")),
   config: () => openApp("config"), settings: () => openApp("config"),
   name: (a) => { if (!a) return log("usage: name <x>", "err"); settings.name = a; saveSettings(); lastMinute = -1; log(`hello, ${a.toLowerCase()}.`, "ok"); },

@@ -86,6 +86,10 @@ pre { font-family: inherit; white-space: pre-wrap; }
 .menubar__modes button[aria-checked="true"] { background: var(--lime); color: var(--lime-ink); }
 @media (hover: hover) { .menubar__modes button:not([aria-checked="true"]):hover { color: var(--lime); } }
 #st-timer { color: var(--amber); }
+.menubar__reset { border: 0; background: none; color: var(--dim); padding: 2px 6px; line-height: 1; font-size: 15px; cursor: pointer; transition: color .12s ease-out, background-color .12s ease-out; }
+@media (hover: hover) { .menubar__reset:hover { background: var(--lime); color: var(--lime-ink); } }
+body:not([data-mode="desktop"]) .menubar__reset { visibility: hidden; }
+.desktop.is-resetting .win { transition: left .32s cubic-bezier(.2,.8,.2,1), top .32s cubic-bezier(.2,.8,.2,1), width .32s cubic-bezier(.2,.8,.2,1), height .32s cubic-bezier(.2,.8,.2,1); }
 .menubar__status { margin-left: auto; display: flex; gap: 16px; color: var(--muted); font-variant-numeric: tabular-nums; }
 #st-time { color: var(--text); }
 #st-net.off { color: var(--red); }
@@ -306,6 +310,7 @@ body:not([data-mode="desktop"]) .menubar__apps { visibility: hidden; }
   .win[data-app="feed"], .win[data-app="cal"] { max-height: 520px; }
   .win[data-app="game"] .game__board { height: min(86vw, 420px); flex: none; }
   .menubar__apps { display: none; }
+  .menubar__reset { display: none; }
   .win__grip { display: none; }
   .focus--stage .focus__len { margin-left: 0; }
   .hide-sm { display: none; }
