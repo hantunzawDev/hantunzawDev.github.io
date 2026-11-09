@@ -7,6 +7,7 @@ import { createMap, subsolar } from "./map.js";
 import { PACK_NAMES, ROTATIONS, parseLine, formatLine, contextLabel, slotKey } from "./quotes.js";
 import { snake, typer } from "./games.js";
 import { bughunt } from "./fps.js";
+import { viz, VIZ_MODES, VIZ_SOURCES } from "./viz.js";
 import { cowsay, neofetch, eightBall, HACK, TRAIN, matrix, calc } from "./fun.js";
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -20,15 +21,15 @@ const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const small = () => matchMedia("(max-width: 900px)").matches;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const css = (name) => getComputedStyle(document.body).getPropertyValue(name).trim();
-const VERSION = "2.7.0";
+const VERSION = "2.8.0";
 const bootedAt = Date.now();
 
 /* =========================================================
    window manager: open/close, drag, resize, maximize
    ========================================================= */
-const APPS = ["clock", "wx", "todo", "notes", "focus", "map", "fortune", "feed", "game", "config"];
-const FILES = { clock: "clock.app", wx: "wx.sh", todo: "todo.txt", notes: "notes.md", focus: "focus.exe", map: "world.map", fortune: "fortune", feed: "feed.rss", game: "game.exe", config: "config.ini" };
-const ALIAS = { world: "map", globe: "map", weather: "wx", settings: "config", news: "feed", quote: "fortune", timer: "focus" };
+const APPS = ["clock", "wx", "todo", "notes", "focus", "map", "fortune", "feed", "viz", "game", "config"];
+const FILES = { clock: "clock.app", wx: "wx.sh", todo: "todo.txt", notes: "notes.md", focus: "focus.exe", map: "world.map", fortune: "fortune", feed: "feed.rss", viz: "viz.app", game: "game.exe", config: "config.ini" };
+const ALIAS = { world: "map", globe: "map", weather: "wx", settings: "config", news: "feed", quote: "fortune", timer: "focus", visualizer: "viz", audio: "viz" };
 const appName = (a) => ALIAS[a] || a;
 // default layout as fractions of the desktop: x, y, w, h
 const DEFAULT_LAYOUT = {
@@ -40,6 +41,7 @@ const DEFAULT_LAYOUT = {
   notes:   [0.237, 0.455, 0.20, 0.52],
   focus:   [0.447, 0.455, 0.32, 0.25],
   fortune: [0.447, 0.725, 0.32, 0.25],
+  viz:     [0.22, 0.08, 0.50, 0.62],
   game:    [0.30, 0.06, 0.40, 0.88],
   config:  [0.30, 0.10, 0.36, 0.78],
 };
@@ -53,6 +55,7 @@ const PORTRAIT_LAYOUT = {
   fortune: [0.506, 0.632, 0.482, 0.16],
   todo:    [0.012, 0.802, 0.482, 0.186],
   notes:   [0.506, 0.802, 0.482, 0.186],
+  viz:     [0.06, 0.14, 0.88, 0.45],
   game:    [0.06, 0.10, 0.88, 0.70],
   config:  [0.10, 0.12, 0.80, 0.62],
 };
@@ -66,7 +69,9 @@ const orientation = () => (innerHeight > innerWidth ? "portrait" : "landscape");
 let orient = orientation();
 const loadLayout = (o) => Object.assign({}, ORIENT[o].defaults, store.get(ORIENT[o].key, {}));
 const layout = loadLayout(orient);
-const closed = new Set(store.get("closed.v2", ["config", "game"]));
+const OPT_IN = ["config", "game", "viz"]; // closed until asked for
+const closed = new Set(store.get("closed.v2", OPT_IN));
+if (!store.get("viz.known")) { closed.add("viz"); store.set("viz.known", true); store.set("closed.v2", [...closed]); }
 const desktop = $("#desktop");
 const win = (app) => $(`.win[data-app="${app}"]`);
 let zTop = 10;
@@ -107,6 +112,7 @@ function openApp(app, { focus = true } = {}) {
   if (wasHidden && !reduce) { el.classList.remove("is-opening"); void el.offsetWidth; el.classList.add("is-opening"); }
   front(app);
   if (app === "config") fillConfig();
+  if (app === "viz") mountViz();
   if (focus) (el.querySelector("textarea, input, select") || el.querySelector(".win__ctrl button"))?.focus();
   renderDock();
   if (small()) el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
@@ -121,6 +127,7 @@ function closeApp(app) {
   closed.add(app);
   store.set("closed.v2", [...closed]);
   if (app === "game") stopGame();
+  if (app === "viz") unmountViz();
   renderDock();
   return true;
 }
@@ -196,7 +203,7 @@ function resetLayout() {
   Object.assign(layout, ORIENT[orient].defaults);
   desktop.classList.add("is-resetting");
   APPS.forEach((a) => { win(a).classList.remove("is-max"); applyLayout(a); });
-  APPS.filter((a) => !["config", "game"].includes(a)).forEach((a) => openApp(a, { focus: false }));
+  APPS.filter((a) => !OPT_IN.includes(a)).forEach((a) => openApp(a, { focus: false }));
   clearTimeout(resetLayout.t);
   resetLayout.t = setTimeout(() => desktop.classList.remove("is-resetting"), 400);
 }
@@ -552,6 +559,12 @@ function startGame(name) {
   $("#game-title").textContent = title;
   game = fn($("#game"), { setMeta: (m) => ($("#game-meta").textContent = m), log });
 }
+/* =========================================================
+   viz.app (three.js is loaded only when the window opens)
+   ========================================================= */
+let vizApp = null;
+function mountViz() { vizApp ??= viz($("#viz"), { setMeta: (m) => ($("#viz-meta").textContent = m), log }); return vizApp; }
+function unmountViz() { vizApp?.stop(); vizApp = null; }
 function stopGame() { game?.stop(); game = null; $("#game").replaceChildren(); $("#game-meta").textContent = ""; }
 let guess = null;
 
@@ -565,6 +578,7 @@ function applyTheme(name) {
   settings.theme = name;
   $('meta[name="theme-color"]').content = css("--bg") || "#0a0c08";
   worldMap?.setColors();
+  vizApp?.setColors();
   return true;
 }
 const cfg = $("#config");
@@ -623,6 +637,7 @@ const HELP = {
   quotes: "quote [now] · quote add <text> -- <author> @tags · quote ls · quote rm <n> · quote rotate visit|30m|hourly|daily · quote pack <name> on|off · quote match on|off · quote tags",
   fun:    "neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee",
   games:  "snake · type · guess · fps (bughunt)",
+  audio:  "viz [mic|sys|off] · viz bars|sphere|tunnel",
   system: "open|close|max <app> · ls · layout reset · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
 };
 const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : "#"; } catch { return "#"; } }; // feed/calendar URLs are third-party data
@@ -793,6 +808,16 @@ const COMMANDS = {
   typing: () => COMMANDS.type(),
   fps: () => { startGame("fps"); log("bughunt.exe: click to lock the mouse. wasd move, mouse/arrows turn, space or click fires, m map.", "ok"); },
   bughunt: () => COMMANDS.fps(),
+  viz: (a) => {
+    a = (a || "").toLowerCase();
+    if (a && !VIZ_SOURCES.includes(a) && !VIZ_MODES.includes(a)) return log(`usage: viz [${VIZ_SOURCES.join("|")}] · viz ${VIZ_MODES.join("|")}`, "err");
+    openApp("viz", { focus: false });
+    const v = mountViz();
+    if (VIZ_MODES.includes(a)) { v.setMode(a); return log(`viz: ${a}`, "ok"); }
+    if (a) return v.setSource(a);
+    log("viz.app: pick mic or sys (chrome/edge: tick \"share audio\"). keys 1 2 3 switch scenes.", "ok");
+  },
+  visualizer: (a) => COMMANDS.viz(a),
   guess: (a) => {
     if (!guess || a === "new") { guess = { n: 1 + Math.floor(Math.random() * 100), tries: 0 }; return log("guess: i picked a number 1-100. type a number.", "ok"); }
     if (a) return guessTry(a);
@@ -911,6 +936,7 @@ input.addEventListener("keydown", (e) => {
     else if (c === "theme") { pool = THEMES; prefix = c + " "; }
     else if (c === "mode") { pool = MODES; prefix = c + " "; }
     else if (c === "news") { pool = Object.keys(FEEDS); prefix = c + " "; }
+    else if (c === "viz") { pool = [...VIZ_SOURCES, ...VIZ_MODES]; prefix = c + " "; }
     else if (c === "help") { pool = Object.keys(HELP); prefix = c + " "; }
     else if (c === "quote" && r.length === 1) { pool = ["now", "add", "ls", "rm", "rotate", "pack", "match", "tags"]; prefix = c + " "; }
     else if (c === "quote" && r[0] === "rotate") { pool = Object.keys(ROTATIONS); prefix = "quote rotate "; r.shift(); }
@@ -925,7 +951,7 @@ input.addEventListener("keydown", (e) => {
 });
 addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName);
-  const inGame = game && document.activeElement?.tagName === "CANVAS";
+  const inGame = (game || vizApp) && document.activeElement?.tagName === "CANVAS";
   if (e.key === "/" && !typing && !inGame) { e.preventDefault(); input.focus(); }
   if (e.key === "Escape" && !typing && document.body.dataset.mode !== "desktop") setMode("desktop");
 });
@@ -968,6 +994,7 @@ async function boot() {
     `mount /home/${(settings.name || "user").toLowerCase()} ........ ok`,
     "net: open-meteo hn dev gh wiki .. ok",
     "games: snake type guess fps ..... ok",
+    "audio: viz (three.js, lazy) ..... ok",
     `todo: ${todos.filter((t) => !t.done).length} open · notes: ${notesEl.value.length} ch`,
     "",
     `${greeting(new Date().getHours())}, ${(settings.name || "friend").toLowerCase()}.`,
@@ -991,6 +1018,7 @@ async function start() {
   const savedTheme = store.get("settings", {}).theme;
   applyTheme((!savedTheme && handoff?.theme && THEMES.includes(handoff.theme)) ? handoff.theme : settings.theme || "lime");
   APPS.forEach((app) => { enableWindow(win(app)); applyLayout(app); win(app).hidden = closed.has(app); });
+  if (!win("viz").hidden) mountViz();
   if (!win("game").hidden) closeApp("game"); // games don't resume across reloads
   addEventListener("resize", () => { syncOrientation(); APPS.forEach(applyLayout); });
   renderDock();

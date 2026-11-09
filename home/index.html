@@ -6,7 +6,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>hzOS</title>
-  <meta name="description" content="hzOS: Han's browser home. Clock, weather, todo, notes, focus timer, feeds and games, run like a tiny operating system.">
+  <meta name="description" content="hzOS: Han's browser home. Clock, weather, todo, notes, focus timer, feeds, an audio visualizer and games, run like a tiny operating system.">
   <meta name="theme-color" content="#0a0c08">
   <meta name="robots" content="noindex, nofollow, noai, noimageai">
   <link rel="icon" href="../assets/favicon.ico">
@@ -21,7 +21,7 @@
     Feeds: Hacker News via Algolia, DEV API, GitHub Search API, Wikipedia (CC BY-SA)
     define: Wiktionary (CC BY-SA) · joke: icanhazdadjoke.com
     Map: Natural Earth via world-atlas, topojson-client (ISC)
-    Fonts: Doto, Martian Mono (SIL OFL) · Motion: GSAP
+    Fonts: Doto, Martian Mono (SIL OFL) · Motion: GSAP · 3D: three.js r170 (MIT, vendored)
   -->
 </head>
 <body data-mode="desktop">
@@ -143,6 +143,11 @@
         </div>
         <ol class="feed__list" id="feed" role="tabpanel" aria-labelledby="tab-hn" aria-live="polite"></ol>
       </div>
+    </section>
+
+    <section class="win" data-app="viz" aria-label="Audio visualizer" hidden>
+      <header class="win__bar"><span class="win__title">viz.app</span><span class="win__meta" id="viz-meta"></span><span class="win__ctrl"><button type="button" data-close aria-label="Close visualizer">x</button></span></header>
+      <div class="win__body viz" id="viz"></div>
     </section>
 
     <section class="win" data-app="game" aria-label="Game" hidden>

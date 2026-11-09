@@ -315,6 +315,14 @@ body:not([data-mode="desktop"]) .menubar__apps { visibility: hidden; }
 .cmd__cwd { color: var(--amber); }
 .cmd input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--text); caret-color: var(--lime); font-size: 13px; }
 .cmd kbd { font-family: inherit; color: var(--dim); border: 1px solid var(--line-hi); padding: 0 6px; }
+/* viz.app */
+.viz { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px 10px; }
+.viz__board { position: relative; flex: 1 1 0; min-height: 120px; border: 1px solid var(--line); overflow: hidden; }
+.viz__board:focus-within { border-color: var(--lime); }
+.viz__board canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+.viz__hint { position: absolute; left: 0; right: 0; bottom: 10px; margin: 0; text-align: center; color: var(--muted); pointer-events: none; }
+.viz__row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.viz__group { display: inline-flex; gap: 4px; }
 .noscript { position: fixed; inset: 40% 0 auto; text-align: center; color: var(--lime); z-index: 70; }
 
 /* ---------- small screens: stacked, no dragging ---------- */
@@ -325,6 +333,7 @@ body:not([data-mode="desktop"]) .menubar__apps { visibility: hidden; }
   .win__bar { cursor: default; }
   .win[data-app="feed"], .win[data-app="cal"] { max-height: 520px; }
   .win[data-app="game"] .game__board { height: min(86vw, 420px); flex: none; }
+  .win[data-app="viz"] .viz__board { height: min(70vw, 360px); flex: none; }
   .menubar__apps { display: none; }
   .menubar__reset { display: none; }
   .win__grip { display: none; }

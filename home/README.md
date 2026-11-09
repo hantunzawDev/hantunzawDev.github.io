@@ -17,6 +17,7 @@ Drag a window by its title bar, resize it from the bottom-right corner, and doub
 | `world.map` | Dot-matrix world map with your location, the live day/night line and where the sun is overhead |
 | `fortune` | A quote picked for the time and day, with a hint like "morning · monday". `again` picks another. |
 | `feed.rss` | Hacker News, DEV, GitHub (top new repos this week) and Wikipedia news |
+| `viz.app` | Three.js audio visualizer: bars, sphere or tunnel, driven by your mic or by shared tab/system audio (Chrome/Edge). Closed until you open it. |
 | `game.exe` | Snake, a typing test and bughunt (a small raycasting shooter) |
 | `config.ini` | Name, fallback city, 12h/24h clock, theme, quotes, links |
 
@@ -64,6 +65,7 @@ tools   = <math> · pass [len] · uuid · b64 <text> · unb64 <text> · g|yt|ddg
 quotes  quote [now] · quote add <text> -- <author> @tags · quote ls · quote rm <n> · quote rotate visit|30m|hourly|daily · quote pack <name> on|off · quote match on|off · quote tags
 fun     neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee
 games   snake · type · guess · fps
+audio   viz [mic|sys|off] · viz bars|sphere|tunnel
 system  open|close|max <app> · ls · layout reset · theme <name> · name|city <x> · 12h|24h · history · clear
 ```
 
@@ -71,6 +73,7 @@ system  open|close|max <app> · ls · layout reset · theme <name> · name|city 
 - `pass` and `uuid` copy their result to the clipboard.
 - `timer 10m tea` counts down in the menubar and chimes when time is up.
 - `matrix` runs until you press a key or click.
+- `viz sys` asks to share a tab or screen: tick "share audio". Video is dropped right away; nothing is recorded or sent anywhere. Safari and Firefox can only use `viz mic`.
 - `quote now` shows the current quote and why it was picked.
 
 ## Make it your browser's home page
@@ -88,6 +91,7 @@ system  open|close|max <app> · ls · layout reset · theme <name> · name|city 
 | `quotes.js` | Quote packs, tag matching and the rotation picker |
 | `games.js` | Snake and the typing test |
 | `fun.js` | cowsay, neofetch, 8ball, the matrix screen and the calculator |
+| `viz.js` | The audio visualizer. Three.js is vendored in `vendor/` (r170, MIT) and loaded only when `viz.app` opens. |
 | `map.js` | The world map: coastlines from Natural Earth, cached in the browser after the first load |
 
 ## Local preview
