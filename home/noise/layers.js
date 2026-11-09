@@ -9,6 +9,8 @@
 import { engine } from "./engine.js";
 import { fillNoise, makeRng } from "./gen.js";
 import { LAYERS, BRAINWAVE, CARRIER_HZ } from "./catalog.js";
+import { SFX } from "./sfx.js";
+import { store } from "../data.js";
 
 const TICK_MS = 200;
 const HORIZON = 1.5;            // seconds scheduled ahead of ctx.currentTime
@@ -47,6 +49,7 @@ function toolbox(dest) {
   const q = []; let energy = 0, lastT = 0; // q: flat [t, a, t, a...]
   const tb = {
     ctx, dest, srcs, nodes, streams,
+    noiseBuf: (c) => buffer(c),
     keep(n) { nodes.push(n); return n; },
     gain(v = 1, to) { const g = ctx.createGain(); g.gain.value = v; if (to) g.connect(to); nodes.push(g); return g; },
     filter(type, f, qv = 1, to) { const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = qv; if (to) b.connect(to); nodes.push(b); return b; },
@@ -322,10 +325,80 @@ function iso(h, t0) {
   return { mod: (now) => 0.7 + 0.3 * Math.sin(TAU * 0.6 * (now - t0)) };
 }
 
+// ---------------------------------------------------------------- recordings
+// A `rec` layer streams its file through a MediaElementSource. It plays the
+// whole recording (nothing is trimmed), loops back to the start when it ends,
+// and remembers where it was, so turning it off and on again carries on.
+
+const recs = new Map(); // id → { el, an, buf } while live
+
+const posKey = (id) => "noise.pos." + id;
+function horn(h, input) {
+  // a horn loudspeaker tied to a post, heard from down the lane: band-limited,
+  // a little overdriven, slap-back off the houses, drifting with the wind
+  const hp = h.filter("highpass", 320, 0.7);
+  const peak = h.keep(ctx.createBiquadFilter()); peak.type = "peaking"; peak.frequency.value = 1750; peak.Q.value = 0.9; peak.gain.value = 7;
+  const ws = h.keep(ctx.createWaveShaper());
+  ws.curve = Float32Array.from({ length: 1024 }, (_, i) => { const x = (i / 1023) * 2 - 1; return Math.tanh(1.9 * x) / Math.tanh(1.9); });
+  const lp = h.filter("lowpass", 4300, 0.7);
+  const dry = h.gain(0.78, h.dest);
+  input.connect(hp); hp.connect(peak); peak.connect(ws); ws.connect(lp); lp.connect(dry);
+  const echoes = h.gain(0.3, h.filter("lowpass", 2400, 0.7, h.dest));
+  for (const [d, fb] of [[0.23, 0.22], [0.41, 0.18], [0.67, 0.1]]) {
+    const dl = h.keep(ctx.createDelay(1)); dl.delayTime.value = d;
+    const g = h.gain(fb); lp.connect(dl); dl.connect(g); g.connect(dl); dl.connect(echoes);
+  }
+  h.osc("sine", 0.055, h.gain(0.14, dry.gain)); // wind carries it closer, then away
+}
+
+function recorded(L) {
+  return (h) => {
+    const el = new Audio();
+    el.preload = "auto";
+    el.src = new URL(L.rec, import.meta.url).href;
+    const saved = +store.get(posKey(L.id), 0) || 0;
+    // resume where it was left; a server without range support only becomes
+    // seekable once enough has buffered, so keep trying until the seek lands
+    let want = saved > 0 ? saved : 0;
+    const seek = () => {
+      if (!want || !Number.isFinite(el.duration)) return;
+      if (want >= el.duration - 2) { want = 0; return; }
+      const s = el.seekable;
+      for (let i = 0; i < s.length; i++) if (s.start(i) <= want && s.end(i) >= want) { el.currentTime = want; want = 0; return; }
+    };
+    for (const ev of ["loadedmetadata", "progress", "canplaythrough"]) el.addEventListener(ev, seek);
+    el.addEventListener("ended", () => { store.set(posKey(L.id), 0); el.currentTime = 0; if (engine.state !== "paused") el.play().catch(() => {}); });
+    const src = ctx.createMediaElementSource(el);
+    const an = ctx.createAnalyser(); an.fftSize = 1024;
+    const pre = h.gain(1);
+    src.connect(pre); pre.connect(an);
+    if (L.horn) horn(h, pre); else pre.connect(h.dest);
+    const save = () => { if (!want && el.currentTime > 0) store.set(posKey(L.id), Math.floor(el.currentTime)); };
+    const saver = setInterval(save, 5000);
+    const follow = () => { if (engine.state === "paused") el.pause(); else if (el.paused) el.play().catch(() => {}); };
+    const unsub = engine.onChange(follow);
+    follow();
+    const rec = { el, an, buf: new Float32Array(an.fftSize) };
+    recs.set(L.id, rec);
+    h.srcs.push({
+      stop() { save(); clearInterval(saver); unsub(); el.pause(); el.removeAttribute("src"); el.load(); if (recs.get(L.id) === rec) recs.delete(L.id); },
+      disconnect() { try { src.disconnect(); } catch {} try { an.disconnect(); } catch {} },
+    });
+    return {
+      mod: () => {
+        an.getFloatTimeDomainData(rec.buf);
+        let sum = 0; for (let i = 0; i < rec.buf.length; i += 4) sum += rec.buf[i] * rec.buf[i];
+        return Math.min(1, Math.sqrt(sum / (rec.buf.length / 4)) * 4.5);
+      },
+    };
+  };
+}
+
 const BUILD = {
   rain, thunder, wind, ocean, stream: stream_, fire, crickets,
-  cafe, fan, train, keyboard, vinyl, iso,
+  cafe, fan, train, keyboard, vinyl, iso, ...SFX,
 };
+for (const L of LAYERS) if (L.rec) BUILD[L.id] = recorded(L);
 for (const c of ["white", "pink", "brown", "blue", "grey"]) BUILD[c] = color(c);
 for (const [id, beat] of Object.entries(BRAINWAVE)) BUILD[id] = binaural(beat);
 
@@ -416,6 +489,13 @@ export const layers = {
     s.t = now;
     lv.set(id, s);
     return s.v < 0.001 ? 0 : s.v;
+  },
+  // playback position of a recording layer: { t, dur } in seconds, or null
+  progress(id) {
+    const r = recs.get(id);
+    if (r) return { t: r.el.currentTime || 0, dur: Number.isFinite(r.el.duration) ? r.el.duration : 0 };
+    const L = LAYERS.find((l) => l.id === id);
+    return L?.rec ? { t: +store.get(posKey(id), 0) || 0, dur: 0 } : null;
   },
   // debug: number of running instances per id (a duplicate would show as a second node)
   liveCount() { const o = {}; for (const id of live.keys()) o[id] = 1; return o; },

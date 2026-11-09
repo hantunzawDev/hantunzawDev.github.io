@@ -798,6 +798,13 @@ body[data-theme="paper"] .win__body.noise { --nz-glow-c: transparent; --nz-hot-g
   transition: border-color .15s ease-out;
 }
 .nz-tile.is-hot { --tc: var(--amber); --tg: var(--nz-hot-glow); }
+/* recordings (metta, monastery): saffron, with a progress rail along the top and the time left */
+.nz-tile.is-rec { --pos: 0; --tc: var(--amber); --tg: var(--nz-hot-glow); background: color-mix(in srgb, var(--amber) 3%, var(--nz-tile-bg)); }
+.nz-tile__pos { position: absolute; left: 0; top: 0; height: 2px; width: calc(100% - 18px); transform: scaleX(var(--pos)); transform-origin: left; background: var(--tc); opacity: .35; pointer-events: none; transition: transform .5s linear; }
+.nz-tile.is-on .nz-tile__pos { opacity: .9; box-shadow: 0 0 6px var(--tg); }
+.nz-tile__left { position: absolute; right: 23px; top: 21px; font-size: 9px; letter-spacing: .04em; color: var(--dim); font-variant-numeric: tabular-nums; pointer-events: none; }
+.nz-tile.is-on .nz-tile__left { color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .nz-tile__pos { transition: none; } }
 .nz-tile.is-on { border-color: var(--line-hi); background: color-mix(in srgb, var(--tc) calc(4% + var(--lv) * 14%), var(--nz-tile-bg)); }
 .nz-tile::before { /* the breath: a soft bloom behind the glyph, opacity follows the layer's level */
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: var(--lv);

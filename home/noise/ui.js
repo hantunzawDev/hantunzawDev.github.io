@@ -22,12 +22,12 @@ import { PRESETS, sanitizeState } from "./presets.js";
 import { parseNoise, parseRadio, parseSleep } from "./cmd.js";
 
 const KNOWN = { genres: GENRES.map((g) => g.id), layers: LAYERS.map((l) => l.id), stations: STATIONS.map((s) => s.id) };
-const GROUPS = ["color", "nature", "places", "brainwave"];
+const GROUPS = ["color", "nature", "animals", "street", "places", "myanmar", "brainwave"];
 const TABS = ["mix", "music", "radio"];
 const SRCS = ["music", "radio", "none"];
 const LIVE = ["playing", "paused", "fading"];
 const SLEEP = [0, 15, 30, 60, 90];
-const HOT = new Set(["fire", "thunder"]); // tiles that glow amber instead of the theme accent
+const HOT = new Set(["fire", "thunder", "horns"]); // tiles that glow amber instead of the theme accent
 const ROWS = [["kick", "kk"], ["hat", "hh"], ["perc", "pc"], ["bass", "bs"]];
 const PREVIEW_SEED = 0x51f15e;
 const RM = matchMedia("(prefers-reduced-motion: reduce)");
@@ -562,7 +562,12 @@ function buildTile(R, L) {
     h("span", { class: "nz-tile__glyph", "aria-hidden": "true", text: L.glyph }),
     h("span", { class: "nz-tile__name", text: L.name }));
   const num = h("span", { class: "nz-tile__pct", "aria-hidden": "true" });
-  const el = h("div", { class: "nz-tile" + (HOT.has(L.id) ? " is-hot" : ""), "data-id": L.id, "data-group": L.group }, btn, num, fader, h("span", { class: "nz-tile__lv", "aria-hidden": "true" }));
+  // recordings: a saffron tile with a thin progress rail and the time left
+  const left = L.rec ? h("span", { class: "nz-tile__left", "aria-hidden": "true" }) : null;
+  if (L.rec) btn.title = L.desc || L.name;
+  const el = h("div", { class: "nz-tile" + (HOT.has(L.id) ? " is-hot" : "") + (L.rec ? " is-rec" : ""), "data-id": L.id, "data-group": L.group }, btn, num, left, fader,
+    L.rec ? h("span", { class: "nz-tile__pos", "aria-hidden": "true" }) : null,
+    h("span", { class: "nz-tile__lv", "aria-hidden": "true" }));
   const sp = spring((v) => el.style.setProperty("--vol", v.toFixed(3)), 0);
   const fromY = (e) => { const r = fader.getBoundingClientRect(); return clamp(1 - (e.clientY - r.top - 4) / Math.max(1, r.height - 8), 0, 1); };
   let drag = false;
@@ -586,7 +591,7 @@ function buildTile(R, L) {
     else if (e.key === "End") { e.preventDefault(); setLayerVol(L.id, 1); }
   });
   fader.addEventListener("wheel", (e) => { if (document.activeElement !== fader) return; e.preventDefault(); setLayerVol(L.id, +clamp(cur() - Math.sign(e.deltaY) * 0.05, 0, 1).toFixed(2)); }, { passive: false });
-  R.tiles.set(L.id, { el, btn, fader, num, sp, on: null, vol: -1, lv: 0 });
+  R.tiles.set(L.id, { el, btn, fader, num, sp, on: null, vol: -1, lv: 0, left, rec: !!L.rec, posAt: -1 });
   return el;
 }
 
@@ -857,6 +862,24 @@ function presetTitle(p) {
   return parts.join(" + ") || p.name;
 }
 
+// recording tiles: progress rail + time left, at 2 Hz (also when reduced motion is on)
+let lastRecPaint = 0;
+function paintRecs() {
+  if (!ui) return;
+  for (const [id, T] of ui.tiles) {
+    if (!T.rec) continue;
+    const p = layers.progress(id);
+    if (!p || !p.dur) { if (T.posAt !== 0) { T.posAt = 0; T.left.textContent = ""; T.el.style.setProperty("--pos", "0"); } continue; }
+    const at = Math.floor(p.t);
+    if (at === T.posAt) continue;
+    T.posAt = at;
+    T.el.style.setProperty("--pos", (p.t / p.dur).toFixed(4));
+    T.left.textContent = "−" + clock(p.dur - p.t);
+    T.btn.title = `${layerOf(id).desc} · ${clock(p.t)} of ${clock(p.dur)}`;
+  }
+}
+const clock = (sec) => { sec = Math.max(0, Math.round(sec)); const hh = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, ss = String(sec % 60).padStart(2, "0"); return hh ? `${hh}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`; };
+
 function sleepText() {
   if (!ui) return;
   const sl = engine.sleepLeft();
@@ -1058,6 +1081,7 @@ function frame(now) {
       const n = clamp(raw / Math.max(0.05, act[id]), 0, 1);
       if (Math.abs(n - T.lv) > 0.004) { T.lv = n; T.el.style.setProperty("--lv", n.toFixed(3)); }
     }
+    if (now - lastRecPaint > 500) { lastRecPaint = now; paintRecs(); }
   } else if (state.tab === "music") {
     const card = ui.genreCards.get(state.genre);
     const on = playing && pick === "music";

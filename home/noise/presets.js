@@ -9,6 +9,10 @@ export const PRESETS = [
   { id: "flow", name: "flow", genre: "dnb", layers: { pink: 0.2 } },
   { id: "sleep", name: "sleep", genre: null, layers: { brown: 0.5, ocean: 0.4, delta: 0.1 }, sleep: 30 },
   { id: "space", name: "space", genre: "ambient", layers: { wind: 0.3, theta: 0.1 } },
+  { id: "village-morning", name: "village morning", genre: null, layers: { rooster: 0.55, chickens: 0.35, crows: 0.3, koel: 0.3, birds: 0.45, dogs: 0.12, bicycle: 0.25, monastery: 0.3 } },
+  { id: "yangon", name: "yangon city", genre: null, layers: { cars: 0.5, horns: 0.4, motorbike: 0.22, crowd: 0.45, market: 0.3, crows: 0.45 } },
+  { id: "monsoon-night", name: "monsoon night", genre: null, layers: { rain: 0.55, frogs: 0.55, crickets: 0.3, thunder: 0.22, dogs: 0.08, monastery: 0.12 } },
+  { id: "metta", name: "metta", genre: null, layers: { metta: 0.7, rain: 0.18, birds: 0.12 } },
 ];
 
 export const DEFAULT_STATE = {

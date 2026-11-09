@@ -1,4 +1,5 @@
 // Pure layer tables: no DOM, no Web Audio.
+// `rec` layers stream a recording (full length, looped, resumed where it was left).
 export const CARRIER_HZ = 200;
 export const BRAINWAVE = { delta: 2, theta: 6, alpha: 10, beta: 18, gamma: 40 };
 
@@ -15,11 +16,27 @@ export const LAYERS = [
   { id: "stream", group: "nature", name: "stream", glyph: "💧" },
   { id: "fire", group: "nature", name: "fire", glyph: "🔥" },
   { id: "crickets", group: "nature", name: "crickets", glyph: "🦗" },
+  { id: "birds", group: "nature", name: "birds", glyph: "🕊" },
+  { id: "rooster", group: "animals", name: "rooster", glyph: "🐓" },
+  { id: "chickens", group: "animals", name: "hens", glyph: "🐔" },
+  { id: "crows", group: "animals", name: "crows", glyph: "🐦‍⬛" },
+  { id: "koel", group: "animals", name: "koel", glyph: "🪶" },
+  { id: "frogs", group: "animals", name: "frogs", glyph: "🐸" },
+  { id: "dogs", group: "animals", name: "dogs", glyph: "🐕" },
+  { id: "cars", group: "street", name: "cars", glyph: "🚗" },
+  { id: "motorbike", group: "street", name: "motorbikes", glyph: "🛵" },
+  { id: "bicycle", group: "street", name: "bicycles", glyph: "🚲" },
+  { id: "horns", group: "street", name: "horns", glyph: "📯" },
+  { id: "crowd", group: "street", name: "crowd", glyph: "👥" },
+  { id: "market", group: "street", name: "market", glyph: "🧺" },
   { id: "cafe", group: "places", name: "café", glyph: "☕" },
   { id: "fan", group: "places", name: "fan", glyph: "✢" },
   { id: "train", group: "places", name: "train", glyph: "🚆" },
   { id: "keyboard", group: "places", name: "keyboard", glyph: "⌨" },
   { id: "vinyl", group: "places", name: "vinyl", glyph: "◉" },
+  { id: "metta", group: "myanmar", name: "myittar poe", glyph: "🙏", rec: "rec/myittar-poe.mp3", desc: "မေတ္တာပို့ · metta chant" },
+  { id: "metta2", group: "myanmar", name: "metta chant", glyph: "📿", rec: "rec/chant-of-metta.mp3", desc: "the chant of metta" },
+  { id: "monastery", group: "myanmar", name: "monastery", glyph: "📢", rec: "rec/mahapatthana.mp3", horn: true, desc: "အသံမစဲ · mahā paṭṭhāna over a horn speaker" },
   { id: "delta", group: "brainwave", name: "binaural δ", glyph: "δ" },
   { id: "theta", group: "brainwave", name: "binaural θ", glyph: "θ" },
   { id: "alpha", group: "brainwave", name: "binaural α", glyph: "α" },

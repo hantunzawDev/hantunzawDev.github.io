@@ -10,7 +10,7 @@ const known = {
 };
 
 test("presets", () => {
-  assert.deepEqual(PRESETS.map((p) => p.id), ["deep-work", "night-coding", "acid-hour", "cafe", "flow", "sleep", "space"]);
+  assert.deepEqual(PRESETS.map((p) => p.id), ["deep-work", "night-coding", "acid-hour", "cafe", "flow", "sleep", "space", "village-morning", "yangon", "monsoon-night", "metta"]);
   const dw = PRESETS[0];
   assert.equal(dw.genre, "dub-techno");
   assert.equal(dw.knobs.dark, 0.4);
