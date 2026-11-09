@@ -1,7 +1,7 @@
 // 404 page, doubling as a joke honeypot for the paths scanners always try
 // (/.env, /wp-admin, /.git/config ...). It never logs or sends anything: GitHub Pages has no
 // server, and the goal is a laugh, not surveillance. Every value shown is an obvious fake.
-import { bump, meterLines, applyHeat } from "./eggs.js";
+import { bump, applyHeat } from "./eggs.js";
 
 const $ = (s) => document.querySelector(s);
 const el = (tag, cls, text) => Object.assign(document.createElement(tag), { className: cls || "", textContent: text ?? "" });
@@ -31,9 +31,8 @@ const shown = path.length > 80 ? path.slice(0, 77) + "…" : path;
 
 function meterOut() {
   const b = bump();
-  const [m, ...more] = meterLines(b);
-  pre(m, "dim");
-  for (const l of more) pre(l, "acc");
+  pre(b.line, "acc");
+  if (b.maxed) { const a = el("a", "", "→ contact"); a.href = "/#contact"; out.append(a); }
 }
 
 if (trap === "env") {

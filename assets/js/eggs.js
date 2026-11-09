@@ -3,47 +3,47 @@
 // Rules: every reply is obviously a joke, nothing typed is ever executed, nothing is logged or
 // sent anywhere. The "hacker meter" lives in sessionStorage and resets when the tab closes.
 
-/* ---------- hacker meter ---------- */
+/* ---------- attempt counter ---------- */
+// no scores or ranks: each attempt just gets a cheekier reaction than the last
 const KEY = "hzsite.heat";
-const RANKS = [
-  [0, "visitor"],
-  [1, "script kiddie"],
-  [3, "pentester"],
-  [5, "l33t"],
-  [8, "please just apply"],
+const REACTIONS = [
+  "oh... u nasty boy. 😏",
+  "again? u serious?",
+  "what are u looking for, exactly?",
+  "there's nothing here. I promise. it's a portfolio.",
+  "okay, now I feel a little violated.",
+  "do your parents know you do this?",
+  "fine. you win. here's the big secret: there is no secret.",
+  "you clearly like breaking things. I build things that don't break. let's talk:",
 ];
-export const MAX_HEAT = RANKS[RANKS.length - 1][0];
-const RED_AT = 3; // the prompt turns red from "pentester" up
+// after the pitch, keep teasing without repeating it
+const ENCORE = [
+  "still here? 🫠",
+  "persistence: 10/10. results: 0/10.",
+  "my mom says it's time for you to go home.",
+  "I'm not mad. I'm just disappointed.",
+  "at this point you're basically my QA team. unpaid, though.",
+];
+export const MAX_HEAT = REACTIONS.length; // the attempt that shows the pitch
+const RED_AT = 3; // the prompt turns red from the third attempt
 
 export function heat() {
   try { return Math.max(0, parseInt(sessionStorage.getItem(KEY), 10) || 0); } catch { return 0; }
 }
-export function rankOf(n = heat()) {
-  let r = RANKS[0][1];
-  for (const [at, name] of RANKS) if (n >= at) r = name;
-  return r;
-}
-export function meter(n = heat()) {
-  const full = n >= MAX_HEAT ? 5 : n > 0 ? Math.min(4, Math.max(1, Math.round((n / MAX_HEAT) * 5))) : 0; // full only at the top rank
-  return `threat level ${"▮".repeat(full)}${"▯".repeat(5 - full)} ${rankOf(n)}`;
+// the reaction for attempt n (1-based)
+export function reaction(n = heat()) {
+  if (n < 1) return "";
+  return n <= REACTIONS.length ? REACTIONS[n - 1] : ENCORE[(n - REACTIONS.length - 1) % ENCORE.length];
 }
 // marks <html> so each shell's CSS can turn its prompt red
 export function applyHeat(n = heat()) { document.documentElement.classList.toggle("hacker", n >= RED_AT); }
 
-// one more attempt: returns the new count and whether the visitor just reached a new rank
+// one more attempt: the new count, its reaction, and whether this one gets the "let's talk" pitch
 export function bump() {
-  const before = heat(), n = before + 1;
-  try { sessionStorage.setItem(KEY, String(n)); } catch { /* private mode: the meter just won't persist */ }
+  const n = heat() + 1;
+  try { sessionStorage.setItem(KEY, String(n)); } catch { /* private mode: the counter just won't persist */ }
   applyHeat(n);
-  return { n, rankUp: rankOf(n) !== rankOf(before) ? rankOf(n) : null, maxed: n === MAX_HEAT };
-}
-
-// the lines a shell prints after a joke: the meter, a rank-up, and the pitch at the top rank
-export function meterLines({ n, rankUp, maxed }) {
-  const lines = [meter(n)];
-  if (rankUp && !maxed) lines.push(`rank up: ${rankUp}.`);
-  if (maxed) lines.push("rank up: please just apply.", "you clearly like breaking things. I build things that don't break. let's talk:");
-  return lines;
+  return { n, line: reaction(n), maxed: n === MAX_HEAT };
 }
 
 /* ---------- detector ---------- */

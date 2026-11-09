@@ -1,7 +1,7 @@
 // hantunzaw.dev terminal home. No build step, no dependencies.
 // Content lives in ME below: edit it there, the commands render from it.
 import { PORTRAIT } from "./portrait.js";
-import { sniff, bump, heat, meter, meterLines, applyHeat, consoleBait, MAX_HEAT } from "./eggs.js";
+import { sniff, bump, heat, reaction, applyHeat, consoleBait, MAX_HEAT } from "./eggs.js";
 
 /* ---------- content ---------- */
 const ME = {
@@ -195,9 +195,9 @@ const COMMANDS = {
   clear: () => { log.innerHTML = ""; return null; },
   sudo: () => `<span class="err">han is the only user in the sudoers file.</span> This incident will be reported.\n` + heatHtml(),
   rm: (a) => /-rf?\s*\//.test(a) ? `<span class="warn">rm: refusing to remove "/".</span> I worked hard on this site.\n` + heatHtml() : `<span class="err">rm: permission denied</span>`,
-  hack: () => heat() ? `<span class="warn">${esc(meter())}</span> <span class="dim">· attempts this session: ${heat()}</span>` +
+  hack: () => heat() ? `<span class="warn">${heat()} attempt${heat() === 1 ? "" : "s"} this session. last thing I said: "${esc(reaction())}"</span>` +
     (heat() >= MAX_HEAT ? `\nYou've seen everything. Next step: ${run("contact")}` : `\n<span class="dim">Keep poking. There are more eggs in here.</span>`) :
-    `<span class="dim">${esc(meter())} · you haven't actually tried anything yet. Go on, I patched it.</span>`,
+    `<span class="dim">you haven't actually tried anything yet. go on, I patched it.</span>`,
   vim: () => `<span class="dim">You're now stuck in vim. Just kidding.</span> Type ${run("help")}.`,
   exit: () => `<span class="dim">There's no leaving.</span> But if you must: ${link(ME.linkedin, "say hi on LinkedIn")} first.`,
   hello: () => `Hey! Start with ${run("about")}.`,
@@ -220,11 +220,10 @@ function suggest(w) {
   return best;
 }
 
-// one more hack attempt: the meter line, a rank-up, and the pitch at the top rank
+// one more hack attempt: a cheekier reaction each time, and the "let's talk" pitch once
 function heatHtml() {
   const b = bump();
-  const [m, ...more] = meterLines(b);
-  return `<span class="dim">${esc(m)}</span>` + more.map((l) => `\n<span class="acc">${esc(l)}</span>`).join("") + (b.maxed ? ` ${run("contact")}` : "");
+  return `<span class="acc">${esc(b.line)}</span>` + (b.maxed ? ` ${run("contact")}` : "");
 }
 
 const hist = [];

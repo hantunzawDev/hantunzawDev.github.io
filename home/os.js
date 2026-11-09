@@ -9,7 +9,7 @@ import { snake, typer } from "./games.js";
 import { bughunt } from "./fps.js";
 import { viz, VIZ_MODES, VIZ_SOURCES } from "./viz.js";
 import { cowsay, neofetch, eightBall, HACK, TRAIN, matrix, calc } from "./fun.js";
-import { sniff, calcJoke, bump, heat, meter, meterLines, applyHeat, consoleBait } from "../assets/js/eggs.js";
+import { sniff, calcJoke, bump, heat, reaction, applyHeat, consoleBait } from "../assets/js/eggs.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -1218,7 +1218,7 @@ const COMMANDS = {
   flip: () => log(`flip: ${Math.random() < 0.5 ? "heads" : "tails"}`, "ok"),
   hack: async () => {
     for (const l of HACK) { log(l, l.startsWith("access") ? "ok" : ""); await sleep(reduce ? 0 : 260); }
-    log(heat() ? `${meter()} · real attempts this session: ${heat()}` : `${meter()} · that was the pretend one. the real eggs need real attempts.`, "dim");
+    log(heat() ? `real attempts this session: ${heat()}. last thing I said: "${reaction()}"` : "that was the pretend one. the real eggs need real attempts.", "dim");
   },
   sl: async () => {
     if (reduce) return art(TRAIN.join("\n"));
@@ -1379,9 +1379,7 @@ function quoteCmd(a = "") {
 const TEXT_CMDS = new Set(["t", "todo", "note", "name", "city", "quote", "quotes", "b64", "unb64", "g", "search", "yt", "ddg", "gh", "define", "wiki"]);
 function hackMeter() {
   const b = bump();
-  const [m, ...more] = meterLines(b);
-  log(m, "dim");
-  for (const l of more) log(l, "ok");
+  log(b.line, "ok");
   if (b.maxed) log(h("a", { href: "/#contact", textContent: "→ hantunzaw.dev/#contact" }));
 }
 function hackJoke(egg, wasSearch) {
