@@ -63,14 +63,23 @@ function grey(out, rng) {
 
 const GENERATORS = { white, pink, brown, blue, grey };
 
-// Fill `out` with `color` noise: DC removed, peak-normalised to 0.9, and the
-// first/last SEAM samples ramped (raised cosine) to zero so a looped buffer
-// has no click at the wrap point.
+// Fill `out` with `color` noise, DC removed and peak-normalised to 0.9.
+// Seamless loop: generate n+SEAM samples, then overlap-add the overflow tail
+// b[n..n+SEAM) into the head with an equal-power crossfade (head sin, tail
+// cos). out[n-1] -> out[0] then continues the signal (out[0] = b[n]), with no
+// amplitude dip at the wrap.
 export function fillNoise(color, out, rng) {
   const gen = GENERATORS[color];
   if (!gen) throw new Error(`unknown noise color: ${color}`);
-  gen(out, rng);
   const n = out.length;
+  const F = Math.min(SEAM, n >> 1);
+  const b = new Float32Array(n + F);
+  gen(b, rng);
+  for (let i = 0; i < n; i++) out[i] = b[i];
+  for (let i = 0; i < F; i++) {
+    const w = ((i + 0.5) / F) * (Math.PI / 2);
+    out[i] = b[i] * Math.sin(w) + b[n + i] * Math.cos(w);
+  }
   let mean = 0;
   for (let i = 0; i < n; i++) mean += out[i];
   mean /= n;
@@ -82,11 +91,5 @@ export function fillNoise(color, out, rng) {
   }
   const g = peak > 0 ? PEAK / peak : 0;
   for (let i = 0; i < n; i++) out[i] *= g;
-  const L = Math.min(SEAM, n >> 1);
-  for (let i = 0; i < L; i++) {
-    const w = 0.5 - 0.5 * Math.cos((Math.PI * i) / L); // 0 -> ~1
-    out[i] *= w;
-    out[n - 1 - i] *= w;
-  }
   return out;
 }
