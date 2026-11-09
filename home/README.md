@@ -17,7 +17,7 @@ Drag a window by its title bar, resize it from the bottom-right corner, and doub
 | `world.map` | Dot-matrix world map with your location, the live day/night line and where the sun is overhead |
 | `fortune` | A quote picked for the time and day, with a hint like "morning · monday". `again` picks another. |
 | `feed.rss` | Hacker News, DEV, GitHub (top new repos this week) and Wikipedia news |
-| `viz.app` | Three.js audio visualizer: bars, sphere or tunnel, driven by your mic or by shared tab/system audio (Chrome/Edge). Closed until you open it. |
+| `viz.app` | Three.js audio visualizer: orb (particle sphere), terrain (scrolling spectrogram landscape) or pulsar (stacked ridgelines), with bloom, driven by your mic or by shared tab/system audio (Chrome/Edge). Closed until you open it. |
 | `game.exe` | Snake, a typing test and bughunt (a small raycasting shooter) |
 | `config.ini` | Name, fallback city, 12h/24h clock, theme, quotes, links |
 
@@ -65,7 +65,7 @@ tools   = <math> · pass [len] · uuid · b64 <text> · unb64 <text> · g|yt|ddg
 quotes  quote [now] · quote add <text> -- <author> @tags · quote ls · quote rm <n> · quote rotate visit|30m|hourly|daily · quote pack <name> on|off · quote match on|off · quote tags
 fun     neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee
 games   snake · type · guess · fps
-audio   viz [mic|sys|off] · viz bars|sphere|tunnel
+audio   viz [mic|sys|off] · viz orb|terrain|pulsar
 system  open|close|max <app> · ls · layout reset · theme <name> · name|city <x> · 12h|24h · history · clear
 ```
 

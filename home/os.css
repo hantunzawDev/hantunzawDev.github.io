@@ -439,6 +439,44 @@ body.term-docked footer.cmd { display: none; }
 .viz__hint { position: absolute; left: 0; right: 0; bottom: 10px; margin: 0; text-align: center; color: var(--muted); pointer-events: none; }
 .viz__row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
 .viz__group { display: inline-flex; gap: 4px; }
+
+/* stage backdrop (bg <theme>): sits under the focus/zen stage, never takes input */
+.backdrop { position: fixed; inset: var(--menubar) 0 var(--cmdbar) 0; z-index: 29; overflow: hidden; pointer-events: none; background: var(--bg); }
+.backdrop[hidden] { display: none; }
+.backdrop canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; opacity: 0.5; }
+.backdrop canvas[hidden] { display: none; }
+/* vignette keeps the middle (timer, clock, quote) quiet whatever is behind it */
+.backdrop::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse 60% 55% at 50% 50%, color-mix(in srgb, var(--bg) 55%, transparent), transparent 75%), radial-gradient(ellipse at center, transparent 55%, var(--bg) 100%); }
+/* css themes */
+.backdrop[data-bg="grid"]::before {
+  content: ""; position: absolute; left: -50%; right: -50%; top: 45%; bottom: -60%;
+  background-image: linear-gradient(var(--line-hi) 1px, transparent 1px), linear-gradient(90deg, var(--line-hi) 1px, transparent 1px);
+  background-size: 48px 48px; transform: perspective(420px) rotateX(62deg); transform-origin: top;
+  mask-image: linear-gradient(to bottom, transparent, #000 35%); opacity: 0.7;
+  animation: bg-grid 3.2s linear infinite;
+}
+@keyframes bg-grid { to { background-position: 0 48px; } }
+.backdrop[data-bg="scan"]::before {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(to bottom, transparent 0, color-mix(in srgb, var(--lime) 9%, transparent) 50%, transparent 100%) 0 -30vh / 100% 30vh no-repeat,
+              repeating-linear-gradient(to bottom, color-mix(in srgb, var(--lime) 6%, transparent) 0 1px, transparent 1px 4px);
+  animation: bg-scan 9s linear infinite;
+}
+@keyframes bg-scan { to { background-position: 0 130vh, 0 0; } }
+.backdrop[data-bg="glow"]::before {
+  content: ""; position: absolute; inset: -20%;
+  background: radial-gradient(circle at 30% 35%, color-mix(in srgb, var(--lime) 16%, transparent), transparent 40%),
+              radial-gradient(circle at 70% 65%, color-mix(in srgb, var(--amber) 10%, transparent), transparent 42%);
+  filter: blur(30px); animation: bg-glow 26s ease-in-out infinite alternate;
+}
+@keyframes bg-glow { 50% { transform: translate(6%, -4%) rotate(8deg); } to { transform: translate(-5%, 5%) rotate(-6deg); } }
+/* per-stage picker, bottom of the stage */
+.bgbar { position: absolute; left: 12px; right: 12px; top: 44px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px 12px; font-size: 11px; opacity: 0.55; transition: opacity 0.2s; }
+.bgbar:hover, .bgbar:focus-within { opacity: 1; }
+.bgbar .key { padding: 1px 7px; }
+.bgbar__group, .bgbar__extra { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; }
+.bgbar__group { gap: 4px; }
+.bgbar__extra[hidden] { display: none; }
 .noscript { position: fixed; inset: 40% 0 auto; text-align: center; color: var(--lime); z-index: 70; }
 
 /* ---------- small screens: stacked, no dragging ---------- */
@@ -458,6 +496,7 @@ body.term-docked footer.cmd { display: none; }
   .snap-ghost { display: none; }
   .win__grip { display: none; }
   .focus--stage .focus__len { margin-left: 0; }
+  .bgbar__label { display: none; }
   .hide-sm { display: none; }
 }
 

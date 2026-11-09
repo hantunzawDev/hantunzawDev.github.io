@@ -8,6 +8,7 @@ import { PACK_NAMES, ROTATIONS, parseLine, formatLine, contextLabel, slotKey } f
 import { snake, typer } from "./games.js";
 import { bughunt } from "./fps.js";
 import { viz, VIZ_MODES, VIZ_SOURCES } from "./viz.js";
+import { backdrop, BG_THEMES } from "./backdrop.js";
 import { cowsay, neofetch, eightBall, HACK, TRAIN, matrix, calc } from "./fun.js";
 import { sniff, calcJoke, bump, heat, reaction, applyHeat, consoleBait } from "../assets/js/eggs.js";
 
@@ -605,9 +606,11 @@ addEventListener("keydown", (e) => {
    modes: desktop · focus · zen
    ========================================================= */
 const MODES = ["desktop", "focus", "zen"];
+const stageBg = backdrop({ log }); // three.js / css background behind focus + zen
 function setMode(mode) {
   if (!MODES.includes(mode)) return false;
   document.body.dataset.mode = mode;
+  stageBg.setMode(mode);
   store.set("mode", mode);
   $("#stage-focus").hidden = mode !== "focus";
   $("#stage-zen").hidden = mode !== "zen";
@@ -992,6 +995,7 @@ function applyTheme(name) {
   $('meta[name="theme-color"]').content = css("--bg") || "#0a0c08";
   worldMap?.setColors();
   vizApp?.setColors();
+  stageBg.setColors();
   return true;
 }
 const cfg = $("#config");
@@ -1077,7 +1081,8 @@ const HELP = {
   quotes: "quote [now] · quote add <text> -- <author> @tags · quote ls · quote rm <n> · quote rotate visit|30m|hourly|daily · quote pack <name> on|off · quote match on|off · quote tags",
   fun:    "neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee",
   games:  "snake · type · guess · fps (bughunt)",
-  audio:  "viz [mic|sys|off] · viz bars|sphere|tunnel",
+  audio:  "viz [mic|sys|off] · viz orb|terrain|pulsar",
+  bg:     "bg [off|audio|drift|aurora|grid|scan|glow] [focus|zen] · bg orb|terrain|pulsar · bg mic|sys|off · [ ] cycle on stage",
   system: "open|close|max <app> · ls · layout reset · tile [on|off] · float [app] [on|off] · snap on|off · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
 };
 const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : "#"; } catch { return "#"; } }; // feed/calendar URLs are third-party data
@@ -1264,6 +1269,24 @@ const COMMANDS = {
     log("viz.app: pick mic or sys (chrome/edge: tick \"share audio\"). keys 1 2 3 switch scenes.", "ok");
   },
   visualizer: (a) => COMMANDS.viz(a),
+  bg: (a) => {
+    const [x = "", where = ""] = (a || "").toLowerCase().split(/\s+/);
+    const stage = ["focus", "zen"].includes(where) ? where : ["focus", "zen"].includes(document.body.dataset.mode) ? document.body.dataset.mode : null;
+    if (!x) return log(`bg: focus=${stageBg.theme("focus")} zen=${stageBg.theme("zen")} scene=${stageBg.scene}`);
+    if (BG_THEMES.includes(x)) {
+      const m = stage || "zen";
+      stageBg.setTheme(x, m);
+      if (document.body.dataset.mode === "desktop") setMode(m);
+      return log(`bg: ${m} → ${x}`, "ok");
+    }
+    if (VIZ_MODES.includes(x)) { stageBg.setScene(x); return log(`bg: audio scene → ${x}`, "ok"); }
+    if (VIZ_SOURCES.includes(x)) {
+      if (!stage) return log("bg: enter focus or zen first (mode zen), then pick a source.", "err");
+      return stageBg.setSource(x);
+    }
+    log(`usage: ${HELP.bg}`, "err");
+  },
+  background: (a) => COMMANDS.bg(a),
   guess: (a) => {
     if (!guess || a === "new") { guess = { n: 1 + Math.floor(Math.random() * 100), tries: 0 }; return log("guess: i picked a number 1-100. type a number.", "ok"); }
     if (a) return guessTry(a);
