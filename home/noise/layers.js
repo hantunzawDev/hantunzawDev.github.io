@@ -13,7 +13,6 @@ import { LAYERS, BRAINWAVE, CARRIER_HZ } from "./catalog.js";
 const TICK_MS = 200;
 const HORIZON = 1.5;            // seconds scheduled ahead of ctx.currentTime
 const VOL_TC = 0.08;            // volume glide, never a step (no clicks)
-const GROUP = Object.fromEntries(LAYERS.map((l) => [l.id, l.group]));
 const TAU = Math.PI * 2;
 
 const wanted = new Map();       // id → 0..1
@@ -422,11 +421,11 @@ export const layers = {
   liveCount() { const o = {}; for (const id of live.keys()) o[id] = 1; return o; },
   // debug: bookkeeping sizes per live layer (must stay bounded)
   sizes() { const o = {}; for (const i of live.values()) o[i.id] = { pending: i.h.pending(), nodes: i.h.nodes.length, srcs: i.h.srcs.length }; return o; },
-  groupOf: (id) => GROUP[id],
 };
 
 engine.attachSource("layers", {
   init(c, mix) { ctx = c; bus = c.createGain(); bus.gain.value = 1; bus.connect(mix); },
   start() { ctx = engine.ctx; sync(); },
+  has() { return wanted.size > 0; },
   stop() { teardown(); },
 });

@@ -24,6 +24,7 @@ export const audio = {
   bass: 0,
   high: 0, // mean of the top ~40% of bands
   beat: 0, // 1 on a detected kick, decays toward 0
+  get holders() { return holders; },
   retain() { holders++; },
   release() {
     holders = Math.max(0, holders - 1);
@@ -74,18 +75,18 @@ function ensureAnalyser(c) {
 
 async function setSource(next, log = () => {}) {
   if (!SOURCES.includes(next)) return false;
+  // checked before anything is torn down: a failed switch keeps the current source
+  if (next === "noise" && !tapNode) { log("audio: noise.app isn't playing. start it first", "err"); return false; }
   stopStream();
   setState("off");
   if (next === "off") return true;
   try {
-    if (next === "noise") {
-      if (!tapNode) throw new Error("noise.app isn't playing. start it first");
-    } else if (next === "mic") {
+    if (next === "mic") {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error("this browser has no microphone access");
       stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
-    } else {
+    } else if (next === "sys") {
       if (!navigator.mediaDevices?.getDisplayMedia) throw new Error("screen/tab audio capture isn't supported here");
       stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true, systemAudio: "include" });
       stream.getVideoTracks().forEach((t) => { t.stop(); stream.removeTrack(t); });

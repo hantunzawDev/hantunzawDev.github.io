@@ -27,7 +27,6 @@ const listeners = new Set();
 export const engine = {
   get ctx() { return ctx; },
   get mixBus() { return mixBus; },
-  get master() { return master; },
   get state() { return state; },
   get vol() { return vol; },
   get error() { return error; },
@@ -78,6 +77,8 @@ function wire(src) {
 
 // Plug in a sound source. `start()`/`stop()` run on entering playing / idle;
 // `load()` (optional, async) runs while `loading` and a rejection becomes FAIL;
+// `has()` (optional) says whether it has anything to play (default yes), so one
+// source failing its load only FAILs playback when no other source can sound;
 // `node` (optional) is connected to the mix bus, or `init(ctx, mixBus)` (optional)
 // is called once the context exists, for sources that build their own nodes.
 function attachSource(name, src) {
@@ -162,16 +163,26 @@ function begin() {
   loadingP = (async () => {
     try {
       await resumeCtx();
-      await Promise.all([...sources.values()].map((s) => s.load?.()));
     } catch (e) {
       if (mine !== epoch) return;
       error = e?.message || String(e);
       dispatch("FAIL");
       return;
     }
+    // Settle each source's load on its own: one failing (music offline) must not
+    // silence the others. FAIL only when nothing that loaded is left to play.
+    const recs = [...sources.values()];
+    const res = await Promise.allSettled(recs.map((s) => Promise.resolve().then(() => s.load?.())));
     if (mine !== epoch || state !== "loading") return;
+    const failed = new Set(recs.filter((_, i) => res[i].status === "rejected"));
+    const ok = [...sources.values()].filter((s) => !failed.has(s));
+    if (failed.size) {
+      const bad = res.find((r) => r.status === "rejected").reason;
+      error = bad?.message || String(bad);
+      if (!ok.some((s) => s.has?.() ?? true)) { dispatch("FAIL"); return; }
+    }
     dispatch("READY");
-    for (const s of sources.values()) startSource(s);
+    for (const s of ok) startSource(s);
     glide(vol, FADE_IN_TC);
     claimVisuals();
   })().finally(() => { if (mine === epoch) loadingP = null; });
@@ -214,6 +225,10 @@ function setVol(v) {
 
 // Sleep timer: fade over the final minute, then stop. 0 clears it.
 function sleep(minutes) {
+  if (state === "fading") { // changing or clearing the timer mid-fade: back to full volume first
+    dispatch("PLAY");
+    glide(vol, FADE_IN_TC);
+  }
   cancelSleep();
   const ms = Math.round((+minutes || 0) * 60e3);
   if (ms > 0) {
@@ -263,4 +278,24 @@ function releaseVisuals() {
   if (holding) { holding = false; audio.release(); }
 }
 // If the user switches audio.js to mic/sys/off themselves, it is no longer ours to reset.
-audio.onChange((src) => { if (ownsNoise && src !== "noise") ownsNoise = false; });
+// When the last other listener lets go (viz closed, stage down), audio.js drops to "off":
+// pick the noise tap back up if we are playing; if the mic/sys stream was what kept an
+// idle or paused context running, suspend it now.
+let lastSrc = audio.source;
+audio.onChange((src) => {
+  const prev = lastSrc;
+  lastSrc = src;
+  if (ownsNoise && src !== "noise") ownsNoise = false;
+  if (!ctx || src === "noise") return;
+  setTimeout(() => { // outside audio.js's listener loop
+    if (audio.source !== src) return;
+    const live = state === "playing" || state === "paused" || state === "fading";
+    if (live && src === "off" && !holding && audio.holders === 0) claimVisuals();
+  }, 0);
+  if ((prev === "mic" || prev === "sys") && canSuspend()) {
+    clearTimeout(suspendTimer);
+    suspendTimer = setTimeout(() => {
+      if ((state === "idle" || state === "paused") && canSuspend() && ctx.state === "running") ctx.suspend().catch(() => {});
+    }, 400);
+  }
+});

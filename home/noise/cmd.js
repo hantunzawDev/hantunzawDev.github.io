@@ -28,7 +28,8 @@ export function parseNoise(args, known) {
   const isLayer = known.layers.includes(head);
   if (isLayer && rest.length) {
     const n = numOf(rest[0]);
-    return n !== null && n >= 0 && n <= 100 ? { type: "layer", id: head, vol: n / 100 } : err("layer volume must be 0-100");
+    if (n === 0) return { type: "layerOff", id: head }; // `rain 0` is `off rain`: never adds a silent layer or starts playback
+    return n !== null && n > 0 && n <= 100 ? { type: "layer", id: head, vol: n / 100 } : err("layer volume must be 0-100");
   }
   if (known.presets.includes(head)) return { type: "preset", id: head };
   if (known.genres.includes(head)) return { type: "genre", id: head };

@@ -36,6 +36,8 @@ const genreOf = (id) => GENRES.find((g) => g.id === id) || GENRES[0];
 const layerOf = (id) => LAYERS.find((l) => l.id === id);
 const isLive = () => LIVE.includes(engine.state);
 const isBusy = () => isLive() || engine.state === "loading";
+// the transport button stops only these; paused / fading (sleep) / idle / error press "play"
+const stopMode = () => engine.state === "playing" || engine.state === "loading";
 const pct = (v) => String(Math.round(v * 100));
 const mmss = (ms) => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 
@@ -131,8 +133,9 @@ function start() {
 function stop() { engine.stop(); }
 function toggle() {
   const st = engine.state;
-  if (st === "playing" || st === "fading" || st === "loading") return stop();
-  if (st === "paused") return void engine.play();
+  if (st === "playing" || st === "loading") return stop();
+  // paused resumes; fading (sleep timer's last minute) cancels the fade back to full volume
+  if (st === "paused" || st === "fading") return void engine.play();
   return start();
 }
 // nothing left to hear: return to idle rather than "playing" silence
@@ -722,10 +725,10 @@ function render() {
   R.retry.hidden = !si.retry;
 
   // transport
-  const stopMode = engine.state === "playing" || engine.state === "fading" || engine.state === "loading";
-  R.play.dataset.k = stopMode ? "stop" : "play";
-  R.play.setAttribute("aria-label", stopMode ? "Stop" : engine.state === "error" ? "Retry" : "Play");
-  R.play.title = stopMode ? "stop (space)" : "play (space)";
+  const sm = stopMode();
+  R.play.dataset.k = sm ? "stop" : "play";
+  R.play.setAttribute("aria-label", sm ? "Stop" : engine.state === "error" ? "Retry" : engine.state === "fading" ? "Keep playing" : "Play");
+  R.play.title = sm ? "stop (space)" : engine.state === "fading" ? "keep playing, cancel the sleep fade (space)" : "play (space)";
   if (document.activeElement !== R.vol) R.vol.value = String(Math.round(state.vol * 100));
   R.vol.style.setProperty("--v", state.vol.toFixed(3));
   R.volNum.textContent = pct(state.vol);
@@ -821,8 +824,16 @@ function render() {
   const np = nowPlaying(st);
   R.np.textContent = np ? `♪ ${np}` : radio.status === "error" ? "the stream did not answer. click to retry" : !radio.analysed && radio.status === "playing" ? "this station can't be analysed, so no scope" : "";
 
-  // window title bar
-  if (R.meta) R.meta.textContent = live ? `${engine.state === "paused" ? "‖" : "▶"} ${pick === "music" ? Math.round(state.knobs.bpm) + " bpm" : pick === "radio" ? "radio" : nLayers + " layers"}${sl ? " · ☾ " + mmss(sl) : ""}` : "";
+  renderMeta();
+}
+
+// window title bar: also refreshed on its own by the loop while a sleep timer counts down
+function renderMeta() {
+  const R = ui;
+  if (!R?.meta) return;
+  const sl = engine.sleepLeft(), nLayers = Object.keys(layers.active()).length;
+  const text = isLive() ? `${engine.state === "paused" ? "‖" : "▶"} ${pick === "music" ? Math.round(state.knobs.bpm) + " bpm" : pick === "radio" ? "radio" : nLayers + " layers"}${sl ? " · ☾ " + mmss(sl) : ""}` : "";
+  if (R.meta.textContent !== text) R.meta.textContent = text;
 }
 
 function renderChips() {
@@ -1024,10 +1035,11 @@ function frame(now) {
   const win = visible(), mv = miniVisible();
   if (!win && !mv) return;
   raf = requestAnimationFrame(frame);
-  if (RM.matches && now - lastPaint < 100) return; // reduced motion: 10 fps, plain bars
+  const playing = engine.state === "playing" || engine.state === "fading";
+  // reduced motion, or nothing sounding (standby scanner, resting ring): 10 fps is plenty
+  if ((RM.matches || !playing) && now - lastPaint < 100) return;
   lastPaint = now;
   audio.read(now / 1000);
-  const playing = engine.state === "playing" || engine.state === "fading";
   if (mv) drawMini(now, playing);
   if (!win) return;
   drawRing(playing);
@@ -1057,10 +1069,9 @@ function frame(now) {
     });
   } else if (state.tab === "radio") drawScope(playing && pick === "radio");
 
-  if (now - lastPoll > 300) { // the sleep countdown has no event of its own
+  if (now - lastPoll > 300) { // the sleep countdown has no event of its own: touch only its text
     lastPoll = now;
-    sleepText();
-    if (ui.meta && engine.sleepLeft()) render();
+    if (engine.sleepLeft()) { sleepText(); renderMeta(); }
   }
 }
 
@@ -1091,7 +1102,8 @@ function buildMini() {
   M.play = h("button", { type: "button", class: "nz-mini__play", "aria-label": "Play", onclick: () => { toggle(); poke(); } }, M.glyph);
   M.tag = h("span", { class: "nz-mini__tag" });
   M.name = h("span", { class: "nz-mini__name" });
-  M.desc = h("span", { class: "nz-mini__desc" });
+  // only the description is announced; the once-a-second sleep countdown stays out of the live region
+  M.desc = h("span", { class: "nz-mini__desc", role: "status", "aria-live": "polite" });
   M.sleep = h("span", { class: "nz-mini__sleep", title: "sleep timer" });
   M.cv = h("canvas", { class: "nz-mini__spec", width: "120", height: "28", "aria-hidden": "true" });
   M.vol = h("input", { type: "range", class: "nz-mini__range", min: "0", max: "100", step: "1", "aria-label": "Volume" });
@@ -1107,7 +1119,7 @@ function buildMini() {
     M.play,
     h("div", { class: "nz-mini__info" },
       h("div", { class: "nz-mini__top" }, h("i", { class: "nz-mini__led", "aria-hidden": "true" }), M.tag, M.name),
-      h("div", { class: "nz-mini__bot", role: "status", "aria-live": "polite" }, M.desc, M.sleep)),
+      h("div", { class: "nz-mini__bot" }, M.desc, M.sleep)),
     M.cv,
     h("div", { class: "nz-mini__vol" }, M.vol, M.volNum),
     M.more);
@@ -1142,9 +1154,9 @@ function renderMini() {
   }
   M.root.dataset.state = engine.state;
   M.root.dataset.src = pick;
-  const busy = isBusy();
-  M.play.dataset.k = busy ? "stop" : "play";
-  M.play.setAttribute("aria-label", busy ? "Stop" : "Play");
+  const sm = stopMode();
+  M.play.dataset.k = sm ? "stop" : "play";
+  M.play.setAttribute("aria-label", sm ? "Stop" : engine.state === "fading" ? "Keep playing" : "Play");
   const info = miniInfo(), si = statusInfo();
   M.tag.textContent = info.tag;
   M.name.textContent = info.name || "noise";
@@ -1248,7 +1260,6 @@ function mountMini(stageEl, opts = {}) {
   if (!stageEl) return noiseUI;
   if (!mini) {
     mini = buildMini();
-    audio.retain();
     const onAny = () => poke();
     const onVis = () => wake();
     const evs = ["pointermove", "pointerdown", "keydown", "focusin", "wheel", "touchstart"];
@@ -1282,7 +1293,6 @@ function unmountMini() {
   miniOff = [];
   mini.root.remove();
   mini = null;
-  audio.release();
 }
 
 // ---------------------------------------------------------------- commands (noise / radio / sleep)
@@ -1314,7 +1324,7 @@ function runNoise(args) {
   switch (r.type) {
     case "error": return fail("noise", r.message);
     case "toggle": {
-      const was = isBusy() && engine.state !== "paused";
+      const was = stopMode();
       toggle();
       return was ? [["noise: ■ stopped"]] : [[`noise: ▶ ${nowLine()}`, "ok"]];
     }
@@ -1426,7 +1436,6 @@ let cleanup = [];
 function mount(el) {
   if (!el) return noiseUI;
   if (ui) { if (ui.root === el) return noiseUI; unmount(); }
-  audio.retain();
   ui = build(el);
   ui.win = el.closest(".win") || el;
   ui.meta = ui.win.querySelector(".win__meta");
@@ -1488,7 +1497,6 @@ function unmount() {
   ui.root.classList.remove("noise");
   if (ui.meta) ui.meta.textContent = "";
   ui = null;
-  audio.release();
   clearTimeout(saveT);
   store.set("noise", state); store.set("noise.src", pick);
 }

@@ -25,6 +25,10 @@ test("noise", () => {
   assert.deepEqual(pn("cafe"), { type: "preset", id: "cafe" });
   assert.deepEqual(pn("cafe", "40"), { type: "layer", id: "cafe", vol: 0.4 });
   assert.deepEqual(pn("off", "rain"), { type: "layerOff", id: "rain" });
+  // a layer at 0 is the same as turning it off: no silent layer, nothing starts
+  assert.deepEqual(pn("rain", "0"), pn("off", "rain"));
+  assert.deepEqual(pn("cafe", "0"), { type: "layerOff", id: "cafe" });
+  assert.equal(pn("rain", "-1").type, "error");
   assert.equal(pn("off", "nope").type, "error");
   assert.equal(pn("off").type, "error");
   assert.deepEqual(pn("save", "my", "mix"), { type: "save", name: "my mix" });

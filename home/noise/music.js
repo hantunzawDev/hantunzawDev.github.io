@@ -37,6 +37,7 @@ let running = false;   // sequencer running (engine started us)
 let cur = null;        // { id, out, inst, seed, pattern }
 let fading = [];       // outgoing genres during a crossfade
 let lastStep = -1, drawPending = 0; // absolute 16th index of the last tick fired
+let stopFade = 0, haltTimer = 0;    // stop(fade): seconds the outgoing genre fades over
 const seeds = new Map(); // genre → seed, fixed for the session
 const knobs = { bpm: 130, dark: 0.5, density: 0.5 };
 const listeners = new Set();
@@ -47,7 +48,7 @@ export const music = {
   steps: EMPTY(),
   step: 0,
   offline: false,
-  exclusive: null, // set by radio.js: called on play() so radio steps aside
+  exclusive: null, // set by radio.js: called on play() so radio steps aside (fading out)
   load,
   play,
   stop,
@@ -113,15 +114,28 @@ const source = {
   stop() {
     running = false;
     if (!transport) return;
-    transport.stop();
-    transport.cancel(0);
-    draw.cancel(0); drawPending = 0;
-    retire(cur, 0.05); cur = null;
-    for (const f of fading.splice(0)) retire(f, 0.05);
-    music.step = 0; music.steps = EMPTY();
-    emit();
+    clearTimeout(haltTimer);
+    if (stopFade > 0 && cur) {
+      // radio taking over: keep the sequencer running while the genre fades out under it
+      fading.push(cur); retire(cur, stopFade); cur = null;
+      music.step = 0; music.steps = EMPTY();
+      emit();
+      haltTimer = setTimeout(() => { if (!running) halt(); }, (stopFade + 0.2) * 1000);
+      return;
+    }
+    halt();
   },
 };
+
+function halt() {
+  transport.stop();
+  transport.cancel(0);
+  draw.cancel(0); drawPending = 0;
+  retire(cur, 0.05); cur = null;
+  for (const f of fading.splice(0)) retire(f, 0.05);
+  music.step = 0; music.steps = EMPTY();
+  emit();
+}
 
 function attach() {
   engine.attachSource("music", source);
@@ -130,6 +144,7 @@ function attach() {
 
 function startSeq() {
   if (!selected || cur) return;
+  clearTimeout(haltTimer);
   const g = byId[selected];
   transport.stop();
   transport.cancel(0);
@@ -270,9 +285,13 @@ function crossfade(id) {
   cur = spawn(id, XFADE);
 }
 
-function stop() {
+// `fade` (seconds): fade the genre out instead of cutting it (radio taking over).
+function stop(fade = 0) {
   selected = null;
-  if (attached) { attached = false; engine.detachSource("music"); }
+  stopFade = fade;
+  try {
+    if (attached) { attached = false; engine.detachSource("music"); }
+  } finally { stopFade = 0; }
   emit();
 }
 

@@ -66,7 +66,7 @@ tools   = <math> · pass [len] · uuid · b64 <text> · unb64 <text> · g|yt|ddg
 quotes  quote [now] · quote add <text> -- <author> @tags · quote ls · quote rm <n> · quote rotate visit|30m|hourly|daily · quote pack <name> on|off · quote match on|off · quote tags
 fun     neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee
 games   snake · type · guess · fps
-audio   viz [mic|sys|off] · viz orb|terrain|pulsar
+audio   viz [mic|sys|noise|off] · viz orb|terrain|pulsar
 noise   noise (play/stop, alt+n) · noise <genre|preset> · noise <layer> [0-100] · noise off <layer> · noise bpm|dark|density|vol <n> · noise save <name> · noise list · radio [station|off] · sleep 30m|off
 system  open|close|max <app> · ls · layout reset · theme <name> · name|city <x> · 12h|24h · history · clear
 ```
@@ -78,6 +78,8 @@ system  open|close|max <app> · ls · layout reset · theme <name> · name|city 
 - `viz sys` asks to share a tab or screen: tick "share audio". Video is dropped right away; nothing is recorded or sent anywhere. Safari and Firefox can only use `viz mic`.
 - `quote now` shows the current quote and why it was picked.
 - `noise night-coding` plays a preset; `noise rain 60` adds rain at 60%; `noise list` shows every genre, layer and preset. Nothing plays until you ask, and your last mix comes back (silent) on reload.
+- `noise cafe` plays the café preset; `noise cafe 50` adds just the café layer at 50% (a name that is both a preset and a layer is the preset unless you give a volume). `noise rain 0` is the same as `noise off rain`.
+- `viz noise` and `bg noise` drive the visuals from whatever noise.app is playing.
 - `sleep 30m` fades the sound out over the last minute, then stops. `alt+n` plays or stops from anywhere.
 
 ## Make it your browser's home page

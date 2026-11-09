@@ -31,7 +31,7 @@ const bootedAt = Date.now();
    ========================================================= */
 const APPS = ["clock", "wx", "todo", "notes", "focus", "map", "fortune", "feed", "term", "viz", "noise", "game", "config"];
 const FILES = { clock: "clock.app", wx: "wx.sh", todo: "todo.txt", notes: "notes.md", focus: "focus.exe", map: "world.map", fortune: "fortune", feed: "feed.rss", term: "term", viz: "viz.app", noise: "noise.app", game: "game.exe", config: "config.ini" };
-const ALIAS = { world: "map", globe: "map", weather: "wx", settings: "config", news: "feed", quote: "fortune", timer: "focus", visualizer: "viz", audio: "viz", terminal: "term", shell: "term", sh: "term", cli: "term", noise: "noise", sound: "noise", music: "noise", radio: "noise" };
+const ALIAS = { world: "map", globe: "map", weather: "wx", settings: "config", news: "feed", quote: "fortune", timer: "focus", visualizer: "viz", audio: "viz", terminal: "term", shell: "term", sh: "term", cli: "term", sound: "noise", music: "noise", radio: "noise" };
 const appName = (a) => (Object.hasOwn(ALIAS, a) ? ALIAS[a] : a);
 // default layout as fractions of the desktop: x, y, w, h
 const DEFAULT_LAYOUT = {
@@ -991,10 +991,20 @@ function unmountViz() { vizApp?.stop(); vizApp = null; }
 /* noise.app (its modules load on first open; Tone.js only when a genre plays) */
 let noiseP = null, noiseWanted = false;
 const loadNoise = () => (noiseP ??= import("./noise/ui.js").then((m) => { queueMicrotask(syncMini); return m.noiseUI; }, (e) => { noiseP = null; throw e; }));
-// mini player on the focus/zen stage; it decides itself whether there is anything to show
+// A saved noise.app selection (genre / station / layers) from a past visit, read from
+// storage so the module need not load to know. noise/ui.js decides the same thing from
+// its live state once loaded (hasSelection); this is only the "is it worth loading" check.
+function noiseSaved() {
+  const src = store.get("noise.src", null), saved = store.get("noise", null);
+  const hasLayers = saved && typeof saved.layers === "object" && saved.layers && Object.keys(saved.layers).length > 0;
+  return src === "music" || src === "radio" || !!hasLayers;
+}
+// mini player on the focus/zen stage; it decides itself whether there is anything to show.
+// Entering focus/zen with a saved selection loads the module (silent: never autoplays).
 function syncMini() {
   const mode = document.body.dataset.mode;
-  noiseP?.then((ui) => {
+  const p = mode !== "desktop" && !noiseP && noiseSaved() ? loadNoise() : noiseP;
+  p?.then((ui) => {
     if (document.body.dataset.mode !== mode) return;
     if (mode === "desktop") ui.unmountMini();
     else ui.mountMini($(`#stage-${mode}`), { onExpand: () => { setMode("desktop"); openApp("noise"); } });
@@ -1004,11 +1014,11 @@ function syncMini() {
 function noiseCmd(cmd, a) {
   return loadNoise().then((ui) => { for (const [text, cls = ""] of ui.run(cmd, a || "")) log(text, cls); }, (e) => log(`noise.app: ${e.message}`, "err"));
 }
-// boot: bring back the last selection (silent) so the mini player can show it
+// boot: bring back the last selection (silent) so the mini player can show it. On the
+// desktop nothing shows it until noise.app opens (or focus/zen starts, via syncMini),
+// so the module isn't fetched there at all.
 function noiseRestore() {
-  const src = store.get("noise.src", null), saved = store.get("noise", null);
-  const hasLayers = saved && typeof saved.layers === "object" && saved.layers && Object.keys(saved.layers).length > 0;
-  if (src === "music" || src === "radio" || hasLayers) loadNoise().catch(() => {});
+  if (document.body.dataset.mode !== "desktop") syncMini();
 }
 function mountNoise() {
   noiseWanted = true;
@@ -1115,9 +1125,9 @@ const HELP = {
   quotes: "quote [now] · quote add <text> -- <author> @tags · quote ls · quote rm <n> · quote rotate visit|30m|hourly|daily · quote pack <name> on|off · quote match on|off · quote tags",
   fun:    "neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee",
   games:  "snake · type · guess · fps (bughunt)",
-  audio:  "viz [mic|sys|off] · viz orb|terrain|pulsar",
+  audio:  "viz [mic|sys|noise|off] · viz orb|terrain|pulsar",
   noise:  "noise (play/stop, alt+n) · noise <genre|preset> · noise <layer> [0-100] · noise off <layer> · noise bpm|dark|density|vol <n> · noise save <name> · noise list · radio [station|off] · sleep 30m|off",
-  bg:     "bg [off|audio|drift|aurora|grid|scan|glow] [focus|zen] · bg orb|terrain|pulsar · bg mic|sys|off · [ ] cycle on stage",
+  bg:     "bg [off|audio|drift|aurora|grid|scan|glow] [focus|zen] · bg orb|terrain|pulsar · bg mic|sys|noise|off · [ ] cycle on stage",
   system: "open|close|max <app> · ls · layout reset · tile [on|off] · float [app] [on|off] · snap on|off · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
 };
 const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : "#"; } catch { return "#"; } }; // feed/calendar URLs are third-party data
