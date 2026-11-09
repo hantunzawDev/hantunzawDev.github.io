@@ -29,7 +29,10 @@ export const DEFAULT_LINKS = [
 
 const SETTINGS_DEFAULTS = {
   name: "Han", city: "Yangon", h24: true, theme: "lime", links: DEFAULT_LINKS,
-  snap: true, tile: false, mfact: 0.55,
+  snap: true, tile: false, mfact: 0.55, gap: 8,
+  secs: true, crt: true, glow: true, motion: "auto",
+  bootMode: "daily", bootSpeed: "normal", startMode: "last", startLayout: "",
+  linksMenu: true, linksNewTab: false,
   qRotation: "hourly", qMatch: true, qp_dev: true, qp_stoic: true, qp_motivation: true, qp_rest: true, qCustom: "",
 };
 export const settings = { ...SETTINGS_DEFAULTS };
@@ -41,6 +44,11 @@ for (const [k, v] of Object.entries(store.get("settings", {}))) {
 }
 for (const k of ["calMode", "calKey", "calIds", "icalUrl", "proxy"]) delete settings[k];
 export function saveSettings() { store.set("settings", settings); }
+export function resetSettings() {
+  for (const k of Object.keys(settings)) delete settings[k];
+  Object.assign(settings, SETTINGS_DEFAULTS);
+  saveSettings();
+}
 
 export function links() {
   const out = [];

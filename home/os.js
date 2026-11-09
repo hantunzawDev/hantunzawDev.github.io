@@ -1,6 +1,6 @@
 // hzOS shell: window manager, modes, apps, command line.
 import {
-  store, settings, saveSettings, links, pad, dayKey, hhmm, hourLabel, ago, isoWeek, spark, bar,
+  store, settings, saveSettings, resetSettings, links, pad, dayKey, hhmm, hourLabel, ago, isoWeek, spark, bar,
   currentQuote, fetchWeather, FEEDS, fetchFeed, getJSON,
 } from "./data.js";
 import { createMap, subsolar } from "./map.js";
@@ -10,6 +10,7 @@ import { bughunt } from "./fps.js";
 import { viz, VIZ_MODES, VIZ_SOURCES } from "./viz.js";
 import { backdrop, BG_THEMES } from "./backdrop.js";
 import { cowsay, neofetch, eightBall, HACK, TRAIN, matrix, calc } from "./fun.js";
+import { icon, hydrateIcons } from "./icons.js";
 import { sniff, calcJoke, bump, heat, reaction, applyHeat, consoleBait } from "../assets/js/eggs.js";
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -19,7 +20,10 @@ const h = (tag, props = {}, ...kids) => {
   for (const k of kids) if (k != null && k !== false) n.append(k);
   return n;
 };
-const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const osReduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+// motion setting: "auto" follows the OS, "full"/"reduced" override it
+const calcReduce = () => settings.motion === "reduced" || (settings.motion !== "full" && osReduce);
+let reduce = calcReduce();
 const small = () => matchMedia("(max-width: 900px)").matches;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const css = (name) => getComputedStyle(document.body).getPropertyValue(name).trim();
@@ -47,7 +51,7 @@ const DEFAULT_LAYOUT = {
   viz:     [0.22, 0.08, 0.50, 0.62],
   noise:   [0.30, 0.06, 0.34, 0.80],
   game:    [0.30, 0.06, 0.40, 0.88],
-  config:  [0.30, 0.10, 0.36, 0.78],
+  config:  [0.27, 0.07, 0.44, 0.84],
 };
 // tall screens (vertical monitors): two even columns, map full width
 const PORTRAIT_LAYOUT = {
@@ -63,7 +67,7 @@ const PORTRAIT_LAYOUT = {
   viz:     [0.06, 0.14, 0.88, 0.45],
   noise:   [0.10, 0.08, 0.80, 0.62],
   game:    [0.06, 0.10, 0.88, 0.70],
-  config:  [0.10, 0.12, 0.80, 0.62],
+  config:  [0.06, 0.10, 0.88, 0.66],
 };
 const MIN_W = 220, MIN_H = 130;
 // each orientation keeps its own defaults and its own saved edits
@@ -105,7 +109,8 @@ function applyRect(el, [x, y, w, hh]) {
 const toFrac = (r, area) => [(r.left - area.left) / area.width, (r.top - area.top) / area.height, r.width / area.width, r.height / area.height];
 
 /* ---------- tiling: dwm-style master + stack ---------- */
-const GAP = 8; // px between tiles and snapped windows, and at the desktop edge
+// px between tiles and snapped windows, and at the desktop edge (config: windows > gap)
+const gapPx = () => clamp(+settings.gap || 0, 0, 24);
 // every window tiles; opt-in apps (viz, game, config) join at the bottom of the stack
 const TILE_ORDER = ["map", "clock", "feed", "todo", "notes", "wx", "focus", "fortune", "term", "viz", "noise", "game", "config"];
 const tileable = (a) => APPS.includes(a);
@@ -150,8 +155,8 @@ function tileCells(apps, W, H) {
 }
 // inset a unit cell by the gap: a full gap at the desktop edge, half a gap on shared edges
 function gapped([x, y, w, hh], { width: W, height: H }) {
-  const e = 1e-6, half = GAP / 2;
-  const l = x < e ? GAP : half, r = x + w > 1 - e ? GAP : half, t = y < e ? GAP : half, b = y + hh > 1 - e ? GAP : half;
+  const G = gapPx(), e = 1e-6, half = G / 2;
+  const l = x < e ? G : half, r = x + w > 1 - e ? G : half, t = y < e ? G : half, b = y + hh > 1 - e ? G : half;
   return [x + l / W, y + t / H, w - (l + r) / W, hh - (t + b) / H];
 }
 function flow() {
@@ -178,7 +183,7 @@ function syncFloatButton(a) {
   if (!b) return;
   const pinned = isPinned(a);
   b.setAttribute("aria-pressed", String(pinned));
-  b.textContent = pinned ? "◱" : "▦";
+  b.innerHTML = icon(pinned ? "float" : "tile");
   b.title = pinned ? "floating · click to tile (alt+shift+space)" : "tiled · click to float (alt+shift+space)";
   b.setAttribute("aria-label", `${pinned ? "Tile" : "Float"} ${FILES[a]}`);
 }
@@ -216,7 +221,7 @@ function syncLayoutChip() {
   desktop.classList.toggle("is-tiled", !!settings.tile);
   const b = $("#layout-tile");
   b.setAttribute("aria-pressed", String(!!settings.tile));
-  $(".chip__glyph", b).textContent = settings.tile ? "▦" : "◱";
+  $(".chip__glyph", b).innerHTML = icon(settings.tile ? "tile" : "float");
   $(".chip__label", b).textContent = settings.tile ? "tile" : "float";
 }
 // re-apply z-order after the layer rules change (floats above tiles only while tiling)
@@ -419,12 +424,13 @@ function renderDock() {
     const b = h("button", { type: "button", className: "task", title: `${FILES[app]} · middle-click to close` });
     b.dataset.app = app;
     b.append(h("span", { className: "task__name", textContent: app === "game" ? ($("#game-title").textContent || "game").replace(/\.exe$/, "") : app }));
-    if (tiling() && isPinned(app)) b.append(h("span", { className: "task__float", textContent: "◱", title: "floating" }));
+    if (tiling() && isPinned(app)) b.append(h("span", { className: "task__float", title: "floating", innerHTML: icon("float") }));
     b.addEventListener("click", () => { openApp(app); win(app).focus({ preventScroll: true }); });
     b.addEventListener("auxclick", (e) => { if (e.button === 1) { e.preventDefault(); closeApp(app); } });
     return b;
   }));
   syncDock();
+  if (!win("config").hidden) renderAppGrid();
 }
 function syncDock() {
   const cur = $(".win.is-front")?.dataset.app;
@@ -442,7 +448,7 @@ function menuItem(label, run, { role = "menuitem", checked, disabled, hint } = {
   const b = h("button", { type: "button", className: "menu__item", disabled: !!disabled });
   b.setAttribute("role", role);
   if (checked != null) b.setAttribute("aria-checked", String(!!checked));
-  b.append(h("span", { className: "menu__check", textContent: checked ? (role === "menuitemradio" ? "●" : "✓") : "" }), h("span", { className: "menu__label", textContent: label }));
+  b.append(h("span", { className: "menu__check", innerHTML: checked ? icon(role === "menuitemradio" ? "dot" : "check") : "" }), h("span", { className: "menu__label", textContent: label }));
   if (hint) b.append(kbd(hint));
   b.addEventListener("click", () => { closeMenus(); run(); });
   return b;
@@ -452,7 +458,7 @@ const menuHead = (t) => h("div", { className: "menu__head", textContent: t });
 const MENUS = {
   sys: () => [
     menuItem("about hzOS", () => COMMANDS.neofetch()),
-    menuItem("settings…", () => openApp("config")),
+    menuItem("settings…", () => openConfig(), { hint: "⌥," }),
     menuItem("command line", () => focusCmd(), { hint: "/" }),
     menuItem(win("term").hidden ? "open terminal window" : "dock terminal", () => (win("term").hidden ? openApp("term") : closeApp("term"))),
     menuItem("help", () => COMMANDS.help()),
@@ -475,10 +481,17 @@ const MENUS = {
       menuItem("tile windows", () => setTile(!settings.tile), { role: "menuitemcheckbox", checked: settings.tile, disabled: !wide, hint: "⌥T" }),
       menuItem(cur ? `float ${FILES[cur]}` : "float window", () => toggleFloat(cur), { role: "menuitemcheckbox", checked: cur && isPinned(cur), disabled: !cur || !tiling(), hint: "⌥⇧␣" }),
       menuItem("snap to edges", () => { settings.snap = !settings.snap; saveSettings(); }, { role: "menuitemcheckbox", checked: settings.snap, disabled: !wide }),
-      menuSep(),
+      menuSep(), menuHead("layouts"),
+      ...Object.keys(presets).sort().map((n) => menuItem(n, () => { applyPreset(n); log(`layout: ${n}`, "ok"); }, { disabled: !wide, hint: settings.startLayout === n ? "startup" : "" })),
+      menuItem("save layout…", () => { openConfig("windows"); $("#cfg-preset-name").focus(); }, { disabled: !wide }),
       menuItem("reset layout", () => { resetLayout(); log("layout: reset.", "ok"); }, { disabled: !wide }),
     ];
   },
+  links: () => [
+    ...links().map((l) => menuItem(l.name, () => openLink(l.url), { hint: l.host.replace(/^www\./, "") })),
+    menuSep(),
+    menuItem("edit links…", () => openConfig("links")),
+  ],
 };
 let openMenu = null;
 function closeMenus({ refocus = false } = {}) {
@@ -568,6 +581,7 @@ function enableWindow(el) {
   bar.addEventListener("dblclick", (e) => { if (!e.target.closest("button")) toggleMax(app); });
   el.addEventListener("pointerdown", () => front(app));
   el.addEventListener("focusin", () => front(app));
+  $$(".win__ctrl [data-close]", el).forEach((b) => { b.innerHTML = icon("close"); });
   $$("[data-close]", el).forEach((b) => b.addEventListener("click", () => closeApp(app)));
 }
 // put every window back to its default spot and reopen the default set
@@ -645,6 +659,7 @@ $$(".modes [role=radio]").forEach((b) => {
 // alt+1/2/3 switch modes from anywhere, even while typing (alt+digit types nothing useful)
 addEventListener("keydown", (e) => {
   if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (e.code === "Comma") { e.preventDefault(); openConfig(); return; }
   if (e.code === "KeyN") { e.preventDefault(); loadNoise().then((ui) => ui.toggle(), (err) => log(`noise.app: ${err.message}`, "err")); return; }
   const m = { Digit1: "desktop", Digit2: "focus", Digit3: "zen" }[e.code];
   if (!m) return;
@@ -681,7 +696,8 @@ let lastMinute = -1;
 let lastDay = dayKey();
 function tick() {
   const now = new Date();
-  $("#st-time").textContent = settings.h24 ? `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}` : hhmm(now);
+  const hm = hhmm(now), ss = pad(now.getSeconds());
+  $("#st-time").textContent = !settings.secs ? hm : settings.h24 ? `${hm}:${ss}` : hm.replace(/(\d{2})(?=[a-z]|$)/, `$1:${ss}`);
   $("#clock-s").textContent = pad(now.getSeconds());
   renderTimers();
   if (now.getMinutes() !== lastMinute) {
@@ -1034,7 +1050,11 @@ let guess = null;
 const THEMES = ["lime", "amber", "ice", "purple", "paper"];
 function applyTheme(name) {
   if (!THEMES.includes(name)) return false;
+  const root = document.documentElement;
+  root.classList.add("no-trans");
   if (name === "lime") delete document.body.dataset.theme; else document.body.dataset.theme = name;
+  void root.offsetHeight; // flush with transitions off
+  requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("no-trans")));
   settings.theme = name;
   $('meta[name="theme-color"]').content = css("--bg") || "#0a0c08";
   worldMap?.setColors();
@@ -1042,28 +1062,331 @@ function applyTheme(name) {
   stageBg.setColors();
   return true;
 }
-const cfg = $("#config");
-function fillConfig() {
-  for (const [k, v] of Object.entries(settings)) {
-    const f = cfg.elements[k];
-    if (!f) continue;
-    if (f.type === "checkbox") f.checked = !!v; else f.value = v;
-  }
+// look: scanlines, glow, motion
+function applyLook() {
+  document.body.classList.toggle("no-glow", !settings.glow);
+  $(".crt").hidden = !settings.crt;
+  reduce = calcReduce();
+  document.body.classList.toggle("motion-reduced", reduce);
+  document.body.classList.toggle("motion-full", settings.motion === "full");
 }
-cfg.addEventListener("submit", (e) => {
-  e.preventDefault();
-  for (const k of Object.keys(settings)) {
-    const f = cfg.elements[k];
-    if (f) settings[k] = f.type === "checkbox" ? f.checked : f.value.trim();
+
+/* ---------- saved window layouts ---------- */
+// a layout is a snapshot of where windows sit, which are open, and the tiling state.
+// positions are per orientation, so a portrait snapshot leaves landscape positions alone.
+const presets = store.get("layouts.v1", {});
+const presetName = (s) => String(s || "").trim().toLowerCase().replace(/[^\w-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24);
+function snapshotLayout() {
+  return {
+    orient, rects: { ...layout }, tile: !!settings.tile, mfact: settings.mfact,
+    open: APPS.filter((a) => a !== "config" && a !== "game" && !win(a).hidden),
+    floats: [...floats], order: [...tileOrder], at: Date.now(),
+  };
+}
+function savePreset(raw) {
+  const name = presetName(raw);
+  if (!name) return null;
+  presets[name] = snapshotLayout();
+  store.set("layouts.v1", presets);
+  renderPresets();
+  return name;
+}
+function deletePreset(name) {
+  if (!presets[name]) return false;
+  delete presets[name];
+  store.set("layouts.v1", presets);
+  if (settings.startLayout === name) { settings.startLayout = ""; saveSettings(); }
+  renderPresets();
+  return true;
+}
+// put the snapshot's state in place without side effects (used at startup, before anything mounts)
+function applyPresetState(p) {
+  if (p.orient === orient && p.rects) { for (const [k, v] of Object.entries(p.rects)) if (APPS.includes(k) && Array.isArray(v) && v.length === 4) layout[k] = v; saveLayout(); }
+  floats.clear(); (p.floats || []).filter((a) => APPS.includes(a)).forEach((a) => floats.add(a)); store.set("float.v1", [...floats]);
+  const order = [...new Set([...(p.order || []).filter((a) => APPS.includes(a)), ...APPS])];
+  tileOrder.splice(0, tileOrder.length, ...order); store.set("tile.order", tileOrder);
+  if (typeof p.mfact === "number") settings.mfact = clamp(p.mfact, 0.2, 0.8);
+  settings.tile = !!p.tile; saveSettings();
+  const want = new Set(p.open || []);
+  for (const a of APPS) {
+    if (a === "config") continue;
+    const show = want.has(a) && a !== "game";
+    win(a).hidden = !show; win(a).classList.remove("is-max");
+    if (show) closed.delete(a); else closed.add(a);
   }
+  store.set("closed.v2", [...closed]);
+}
+function applyPreset(name) {
+  const p = presets[name];
+  if (!p || small()) return false;
+  const before = new Set(APPS.filter((a) => !win(a).hidden));
+  applyPresetState(p);
+  for (const a of APPS) {
+    const on = !win(a).hidden;
+    if (on === before.has(a)) continue;
+    if (on) { if (a === "viz") mountViz(); if (a === "noise") mountNoise(); }
+    else { if (a === "game") stopGame(); if (a === "viz") unmountViz(); if (a === "noise") unmountNoise(); }
+  }
+  syncTermDock();
+  syncLayoutChip();
+  relayout(true);
+  restack();
+  renderDock();
+  const top = p.open?.find((a) => !win(a).hidden);
+  if (top) front(top);
+  if (!win("config").hidden) fillConfig();
+  return true;
+}
+
+/* ---------- config.ini: a sectioned settings window, changes apply and save as you go ---------- */
+const cfg = $("#config");
+const cfgTabs = $$(".config__nav [role=tab]", cfg);
+function showPane(name, { focus = false } = {}) {
+  if (!cfgTabs.some((t) => t.dataset.pane === name)) name = "general";
+  for (const t of cfgTabs) {
+    const on = t.dataset.pane === name;
+    t.setAttribute("aria-selected", String(on));
+    t.tabIndex = on ? 0 : -1;
+    if (on && focus) t.focus();
+  }
+  $$(".config__pane", cfg).forEach((p) => { p.hidden = p.dataset.pane !== name; });
+  $(".config__panes", cfg).scrollTop = 0;
+  store.set("cfg.pane", name);
+}
+cfgTabs.forEach((t, i) => {
+  t.addEventListener("click", () => showPane(t.dataset.pane));
+  t.addEventListener("keydown", (e) => {
+    const d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    showPane(cfgTabs[(i + d + cfgTabs.length) % cfgTabs.length].dataset.pane, { focus: true });
+  });
+});
+function openConfig(pane) {
+  openApp("config", { focus: false });
+  if (pane) showPane(pane);
+  $(".config__nav [aria-selected=true]", cfg)?.focus();
+}
+
+// read and write a settings key through the form, whatever control it lives in
+function fieldOf(k) { const f = cfg.elements[k]; return f && (f instanceof RadioNodeList || f.name === k) ? f : null; }
+function writeField(k, v) {
+  const f = fieldOf(k);
+  if (!f) return;
+  if (f instanceof RadioNodeList) { for (const r of f) r.checked = r.value === String(v); return; }
+  if (f.type === "checkbox") f.checked = !!v; else f.value = v;
+  const o = $(`[data-out="${k}"]`, cfg);
+  if (o) o.textContent = k === "mfact" ? `${Math.round(v * 100)}%` : `${v}px`;
+}
+function readField(k) {
+  const f = fieldOf(k);
+  const cur = settings[k];
+  if (f instanceof RadioNodeList) return typeof cur === "boolean" ? f.value === "true" : f.value;
+  if (f.type === "checkbox") return f.checked;
+  if (typeof cur === "number") return +f.value;
+  return f.value.trim();
+}
+function fillConfig() {
+  for (const [k, v] of Object.entries(settings)) writeField(k, v);
+  renderStartLayouts();
+  writeField("startLayout", presets[settings.startLayout] ? settings.startLayout : "");
+  renderLinkRows();
+  renderAppGrid();
+  renderPresets();
+}
+const savedTip = $("#cfg-saved");
+function flashSaved(text = "saved") {
+  savedTip.textContent = text;
+  savedTip.classList.remove("is-on"); void savedTip.offsetWidth; savedTip.classList.add("is-on");
+  clearTimeout(flashSaved.t);
+  flashSaved.t = setTimeout(() => savedTip.classList.remove("is-on"), 1400);
+}
+const requote = () => { qSlot = slotKey(settings.qRotation, new Date()); qSalt = 0; renderFortune(); };
+const clockNow = () => { lastMinute = -1; tick(); };
+// what to redo when a key changes; anything not listed just saves
+const LIVE = {
+  name: clockNow, h24: clockNow, secs: clockNow, city: () => loadWx(true),
+  theme: () => applyTheme(settings.theme),
+  crt: applyLook, glow: applyLook, motion: applyLook,
+  snap: () => {}, tile: () => setTile(settings.tile, { say: false }),
+  mfact: () => relayout(true), gap: () => relayout(true),
+  qRotation: requote, qMatch: requote, qp_dev: requote, qp_stoic: requote, qp_motivation: requote, qp_rest: requote, qCustom: requote,
+  linksMenu: syncLinksMenu,
+};
+function commit(k) {
+  if (!Object.hasOwn(settings, k) || !fieldOf(k)) return;
+  const v = readField(k);
+  if (v === settings[k]) return;
+  settings[k] = v;
   saveSettings();
-  applyTheme(settings.theme);
-  setTile(settings.tile, { say: false });
-  qSlot = slotKey(settings.qRotation, new Date()); qSalt = 0; renderFortune();
-  closeApp("config");
-  log("config.ini saved.", "ok");
-  lastMinute = -1;
-  loadWx(true);
+  LIVE[k]?.();
+  writeField(k, v);
+  flashSaved();
+}
+let typing = 0;
+cfg.addEventListener("input", (e) => {
+  const k = e.target.name;
+  if (!k) return;
+  if (e.target.type === "range") { commit(k); return; }
+  if (e.target.matches("input[type=text], textarea") && k !== "city") { clearTimeout(typing); typing = setTimeout(() => commit(k), 450); }
+});
+cfg.addEventListener("change", (e) => { if (e.target.name) commit(e.target.name); });
+cfg.addEventListener("submit", (e) => { e.preventDefault(); const k = document.activeElement?.name; if (k) commit(k); });
+
+// windows pane: open/close toggles for every app
+function renderAppGrid() {
+  const grid = $("#cfg-apps");
+  if (!grid) return;
+  grid.replaceChildren(...APPS.filter((a) => a !== "config" && a !== "game").map((a) => {
+    const box = h("input", { type: "checkbox", checked: !win(a).hidden });
+    box.addEventListener("change", () => (box.checked ? openApp(a, { focus: false }) : closeApp(a)));
+    return h("label", { className: "pill pill--app" }, box, h("span", { textContent: FILES[a] }));
+  }));
+}
+const fmtPreset = (p) => {
+  const n = (p.open || []).length;
+  return `${n} window${n === 1 ? "" : "s"} · ${p.tile ? "tiled" : "floating"} · ${p.orient}`;
+};
+function renderPresets() {
+  const list = $("#cfg-presets");
+  if (!list) return;
+  const names = Object.keys(presets).sort();
+  if (!names.length) {
+    list.replaceChildren(h("p", { className: "presets__empty", textContent: "no saved layouts yet. arrange your windows, name it below and save." }));
+  } else {
+    list.replaceChildren(...names.map((n) => {
+      const p = presets[n];
+      const iconBtn = (ic, label, run, cls = "") => {
+        const b = h("button", { type: "button", className: `iconbtn ${cls}`, title: label, innerHTML: icon(ic) });
+        b.setAttribute("aria-label", `${label} ${n}`);
+        b.addEventListener("click", run);
+        return b;
+      };
+      return h("div", { className: "preset" },
+        h("span", { className: "preset__icon", innerHTML: icon("layout") }),
+        h("span", { className: "preset__text" },
+          h("span", { className: "preset__name", textContent: n }, settings.startLayout === n ? h("span", { className: "badge", textContent: "startup" }) : null),
+          h("span", { className: "preset__meta", textContent: fmtPreset(p) })),
+        iconBtn("play", "Apply", () => { applyPreset(n); flashSaved(`applied ${n}`); }),
+        iconBtn("save", "Overwrite with current", () => { savePreset(n); flashSaved(`updated ${n}`); }),
+        iconBtn("trash", "Delete", () => { deletePreset(n); renderStartLayouts(); flashSaved(`deleted ${n}`); }, "iconbtn--danger"));
+    }));
+  }
+  renderStartLayouts();
+}
+function renderStartLayouts() {
+  const sel = $("#cfg-startwin");
+  if (!sel) return;
+  sel.replaceChildren(h("option", { value: "", textContent: "restore last session" }),
+    ...Object.keys(presets).sort().map((n) => h("option", { value: n, textContent: `layout: ${n}` })));
+  sel.value = presets[settings.startLayout] ? settings.startLayout : "";
+}
+$("#cfg-preset-save").addEventListener("click", () => {
+  const inp = $("#cfg-preset-name");
+  const n = savePreset(inp.value || `layout-${Object.keys(presets).length + 1}`);
+  if (n) { inp.value = ""; flashSaved(`saved ${n}`); }
+});
+$("#cfg-preset-name").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("#cfg-preset-save").click(); } });
+$("#cfg-layout-reset").addEventListener("click", () => { resetLayout(); fillConfig(); flashSaved("layout reset"); });
+$("#cfg-boot-test").addEventListener("click", () => boot({ force: true }));
+
+// links pane: one row per link, written back to settings.links as "name | url" lines
+function linkRows() {
+  return (settings.links || "").split("\n").filter((l) => l.trim()).map((l) => {
+    const i = l.indexOf("|");
+    return i < 0 ? [l.trim(), ""] : [l.slice(0, i).trim(), l.slice(i + 1).trim()];
+  });
+}
+const validUrl = (u) => { try { return /^https?:$/.test(new URL(u).protocol); } catch { return false; } };
+function writeLinks() {
+  const rows = $$("#cfg-links .linkrow").map((r) => [$(".linkrow__name", r).value.trim(), $(".linkrow__url", r).value.trim()]);
+  settings.links = rows.filter(([n, u]) => n || u).map(([n, u]) => `${n} | ${u}`).join("\n");
+  saveSettings();
+  syncLinksMenu();
+  flashSaved();
+}
+function renderLinkRows(focusIdx = -1) {
+  const list = $("#cfg-links");
+  const rows = linkRows();
+  list.replaceChildren(...rows.map(([n, u], i) => {
+    const name = h("input", { type: "text", className: "linkrow__name", value: n, placeholder: "name", maxLength: 24, spellcheck: false });
+    const url = h("input", { type: "url", className: "linkrow__url", value: u, placeholder: "https://", spellcheck: false });
+    name.setAttribute("aria-label", `Link ${i + 1} name`);
+    url.setAttribute("aria-label", `Link ${i + 1} address`);
+    const mark = () => url.toggleAttribute("aria-invalid", !!url.value.trim() && !validUrl(url.value.trim()));
+    mark();
+    let t = 0;
+    for (const f of [name, url]) f.addEventListener("input", () => { mark(); clearTimeout(t); t = setTimeout(writeLinks, 400); });
+    const move = (d) => {
+      const all = linkRows(); const j = i + d;
+      if (j < 0 || j >= all.length) return;
+      [all[i], all[j]] = [all[j], all[i]];
+      settings.links = all.map(([a, b]) => `${a} | ${b}`).join("\n"); saveSettings(); renderLinkRows(); flashSaved();
+      $$("#cfg-links .linkrow")[j]?.querySelector(d < 0 ? "[data-up]" : "[data-down]")?.focus();
+    };
+    const btn = (ic, label, run, attr) => {
+      const b = h("button", { type: "button", className: "iconbtn", title: label, innerHTML: icon(ic) });
+      b.setAttribute("aria-label", `${label}: ${n || "link " + (i + 1)}`);
+      if (attr) b.setAttribute(attr, "");
+      b.addEventListener("click", run);
+      return b;
+    };
+    let host = "";
+    try { host = new URL(u).hostname.replace(/^www\./, ""); } catch {}
+    return h("li", { className: "linkrow" },
+      h("span", { className: "linkrow__ico", innerHTML: icon("link"), title: host }),
+      name, url,
+      btn("up", "Move up", () => move(-1), "data-up"),
+      btn("down", "Move down", () => move(1), "data-down"),
+      btn("trash", "Remove", () => { const all = linkRows(); all.splice(i, 1); settings.links = all.map(([a, b]) => `${a} | ${b}`).join("\n"); saveSettings(); renderLinkRows(); flashSaved("removed"); }));
+  }));
+  if (!rows.length) list.append(h("li", { className: "presets__empty", textContent: "no links yet." }));
+  if (focusIdx >= 0) $$("#cfg-links .linkrow__name")[focusIdx]?.focus();
+  syncLinksMenu();
+}
+$("#cfg-link-add").addEventListener("click", () => {
+  const rows = linkRows();
+  settings.links = [...rows.map(([a, b]) => `${a} | ${b}`), "new | https://"].join("\n");
+  saveSettings();
+  renderLinkRows(rows.length);
+  const n = $$("#cfg-links .linkrow__name")[rows.length];
+  n?.select();
+});
+function syncLinksMenu() { $('[data-menu="links"]').hidden = !settings.linksMenu || !links().length; }
+const openLink = (url) => (settings.linksNewTab ? window.open(safeUrl(url), "_blank", "noopener") : go(url));
+
+// data pane: backup / restore / reset
+const hzKeys = () => { try { return Object.keys(localStorage).filter((k) => k.startsWith("hz.")); } catch { return []; } };
+$("#cfg-export").addEventListener("click", () => {
+  const data = Object.fromEntries(hzKeys().map((k) => [k, localStorage.getItem(k)]));
+  const blob = new Blob([JSON.stringify({ hzos: VERSION, at: new Date().toISOString(), data }, null, 2)], { type: "application/json" });
+  const a = h("a", { href: URL.createObjectURL(blob), download: `hzos-backup-${dayKey()}.json` });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  flashSaved("exported");
+});
+$("#cfg-import").addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    const { data } = JSON.parse(await file.text());
+    const entries = Object.entries(data || {}).filter(([k, v]) => k.startsWith("hz.") && typeof v === "string");
+    if (!entries.length) throw new Error("no hzOS data in that file");
+    if (!confirm(`replace this browser's hzOS data with ${entries.length} saved items from ${file.name}?`)) return;
+    hzKeys().forEach((k) => localStorage.removeItem(k));
+    entries.forEach(([k, v]) => localStorage.setItem(k, v));
+    location.reload();
+  } catch (err) { log(`import: ${err.message}`, "err"); flashSaved("import failed"); }
+});
+$("#cfg-reset-settings").addEventListener("click", () => {
+  if (!confirm("reset every setting to its default? todos, notes and layouts stay.")) return;
+  resetSettings(); location.reload();
+});
+$("#cfg-reset-all").addEventListener("click", () => {
+  if (!confirm("wipe ALL hzOS data in this browser: todos, notes, settings, layouts? this can't be undone.")) return;
+  hzKeys().forEach((k) => localStorage.removeItem(k));
+  location.reload();
 });
 
 /* =========================================================
@@ -1128,7 +1451,7 @@ const HELP = {
   audio:  "viz [mic|sys|noise|off] · viz orb|terrain|pulsar",
   noise:  "noise (play/stop, alt+n) · noise <genre|preset> · noise <layer> [0-100] · noise off <layer> · noise bpm|dark|density|vol <n> · noise save <name> · noise list · radio [station|off] · sleep 30m|off",
   bg:     "bg [off|audio|drift|aurora|grid|scan|glow] [focus|zen] · bg orb|terrain|pulsar · bg mic|sys|noise|off · [ ] cycle on stage",
-  system: "open|close|max <app> · ls · layout reset · tile [on|off] · float [app] [on|off] · snap on|off · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
+  system: "open|close|max <app> · ls · layout ls|save|load|rm|startup <name> · layout reset · config [general|look|windows|startup|links|quotes|data] · tile [on|off] · float [app] [on|off] · snap on|off · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
 };
 const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : "#"; } catch { return "#"; } }; // feed/calendar URLs are third-party data
 const go = (url) => { location.href = safeUrl(url); };
@@ -1346,7 +1669,17 @@ const COMMANDS = {
   close: (a) => (closeApp(a) ? log(`close ${a}`) : log(`no app "${a}"`, "err")),
   max: (a) => (toggleMax(a || $(".win.is-front")?.dataset.app) ? log(`max ${a || "front window"}`) : log("usage: max <app>", "err")),
   ls: () => log(APPS.map((a) => FILES[a] + (win(a).hidden ? "" : "*")).join("  ") + "\n(* = open)"),
-  layout: (a) => (a === "reset" ? (resetLayout(), log("layout: reset.", "ok")) : log("usage: layout reset", "err")),
+  layout: (a = "") => {
+    const [sub, ...rest] = a.split(/\s+/);
+    const n = presetName(rest.join(" "));
+    if (sub === "reset") return resetLayout(), log("layout: reset.", "ok");
+    if (sub === "save") { const k = savePreset(n || `layout-${Object.keys(presets).length + 1}`); return log(`layout: saved ${k}`, "ok"); }
+    if (sub === "load" || sub === "use") return applyPreset(n) ? log(`layout: ${n}`, "ok") : log(`layout: no layout named "${n}". try layout ls`, "err");
+    if (sub === "rm") return deletePreset(n) ? log(`layout: deleted ${n}`, "ok") : log(`layout: no layout named "${n}"`, "err");
+    if (sub === "startup") { settings.startLayout = presets[n] ? n : ""; saveSettings(); return log(`startup: ${settings.startLayout || "restore last session"}`, "ok"); }
+    if (sub === "ls" || !sub) { const ks = Object.keys(presets).sort(); return log(ks.length ? ks.map((k) => `${k}${settings.startLayout === k ? " *" : ""}  ${fmtPreset(presets[k])}`).join("\n") : "no saved layouts. layout save <name>"); }
+    log("usage: layout ls|save <name>|load <name>|rm <name>|startup <name>|reset", "err");
+  },
   tile: (a) => {
     if (small()) return log("tile: needs a wider screen", "err");
     if (!a || a === "toggle") return setTile(!settings.tile);
@@ -1368,7 +1701,7 @@ const COMMANDS = {
     settings.snap = a === "on"; saveSettings(); log(`snap: ${a}`, "ok");
   },
   theme: (a) => (applyTheme(a) ? (saveSettings(), log(`theme: ${a}`, "ok")) : log(`usage: theme ${THEMES.join("|")}`, "err")),
-  config: () => openApp("config"), settings: () => openApp("config"),
+  config: (a) => openConfig(a), settings: (a) => openConfig(a),
   name: (a) => { if (!a) return log("usage: name <x>", "err"); settings.name = a; saveSettings(); lastMinute = -1; log(`hello, ${a.toLowerCase()}.`, "ok"); },
   city: (a) => { if (!a) return log("usage: city <x>", "err"); settings.city = a; saveSettings(); loadWx(true); log(`fallback city: ${a}`, "ok"); },
   "12h": () => { settings.h24 = false; saveSettings(); lastMinute = -1; log("clock: 12h", "ok"); },
@@ -1475,7 +1808,7 @@ function run(raw) {
   else if (egg) return hackJoke(egg, !Object.hasOwn(COMMANDS, key));
   if (key === "gh") return arg ? go(`https://github.com/search?q=${enc(arg)}`) : COMMANDS.news("gh");
   if (Object.hasOwn(COMMANDS, key)) return COMMANDS[key](arg);
-  if (link) return go(link.url);
+  if (link) return openLink(link.url);
   if (/^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(line)) return go(`https://${line}`);
   COMMANDS.g(line);
 }
@@ -1549,37 +1882,85 @@ const handoff = (() => {
   return { theme: q.get("theme") };
 })();
 
-async function boot() {
-  const firstToday = store.get("bootDay") !== dayKey();
+// how often the boot log plays (config: startup > boot screen)
+function shouldBoot() {
+  if (handoff) return true;
+  if (settings.bootMode === "never") return false;
+  if (settings.bootMode === "always") return true;
+  if (settings.bootMode === "session") { try { return !sessionStorage.getItem("hz.booted"); } catch { return true; } }
+  return store.get("bootDay") !== dayKey();
+}
+// a tab that loads unseen (chrome restoring its startup tabs, a home page opening behind
+// another window) waits until it is actually on screen: otherwise the boot played to nobody
+const whenVisible = () => (!document.hidden ? Promise.resolve() : new Promise((r) => {
+  const f = () => { if (document.hidden) return; document.removeEventListener("visibilitychange", f); r(); };
+  document.addEventListener("visibilitychange", f);
+}));
+const BOOT_STEP = { slow: 190, normal: 110, fast: 40 };
+let booting = false;
+async function boot({ force = false } = {}) {
+  if (booting) return;
+  await whenVisible();
+  if (!force && (!shouldBoot() || reduce)) return reveal(false);
+  booting = true;
   store.set("bootDay", dayKey());
-  if ((!firstToday && !handoff) || reduce || document.hidden) { document.documentElement.classList.remove("handoff"); return; }
+  try { sessionStorage.setItem("hz.booted", "1"); } catch {}
   const el = $("#boot"), pre = $("#boot-log");
+  window.gsap?.killTweensOf(el);
+  el.style.opacity = "";
   el.hidden = false;
-  if (handoff) await sleep(Math.max(0, 560 - performance.now())); // power-on started at first paint; let it open before text lands
+  el.classList.add("is-running");
+  pre.textContent = "";
+  document.documentElement.classList.remove("preboot"); // the boot screen covers the desktop from here
+  if (handoff && !force) await sleep(Math.max(0, 560 - performance.now())); // power-on started at first paint; let it open before text lands
   const lines = [
-    ...(handoff ? ["handoff from hzsh (tty1) ...... ok"] : []),
+    ...(handoff && !force ? ["handoff from hzsh (tty1) ...... ok"] : []),
     `hzOS ${VERSION} · build ${dayKey().replace(/-/g, "")}`,
     "cpu .................... ok",
     `mount /home/${(settings.name || "user").toLowerCase()} ........ ok`,
     "net: open-meteo hn dev gh wiki .. ok",
     "games: snake type guess fps ..... ok",
     "audio: viz (three.js, lazy) ..... ok",
+    `layout: ${presets[settings.startLayout] ? settings.startLayout : "last session"} · ${APPS.filter((a) => !win(a).hidden).length} windows`,
     `todo: ${todos.filter((t) => !t.done).length} open · notes: ${notesEl.value.length} ch`,
     "",
     `${greeting(new Date().getHours())}, ${(settings.name || "friend").toLowerCase()}.`,
   ];
   let skip = false;
   const stop = () => { skip = true; };
-  addEventListener("keydown", stop, { once: true });
-  el.addEventListener("pointerdown", stop, { once: true });
+  addEventListener("keydown", stop);
+  el.addEventListener("pointerdown", stop);
+  const step = BOOT_STEP[settings.bootSpeed] ?? BOOT_STEP.normal;
   for (const l of lines) {
     if (skip) break;
     pre.textContent += l + "\n";
-    await sleep(110);
+    await sleep(step);
   }
-  if (!skip) await sleep(350);
-  el.hidden = true;
-  document.documentElement.classList.remove("handoff");
+  if (!skip) await sleep(step * 3);
+  removeEventListener("keydown", stop);
+  el.removeEventListener("pointerdown", stop);
+  el.classList.remove("is-running");
+  booting = false;
+  return reveal(true);
+}
+// lift the cover: the boot screen (or the blank pre-boot cover) fades while the open windows
+// rise into place in reading order, one wave. menubar and command line are already there.
+function reveal(fromBoot) {
+  const root = document.documentElement, el = $("#boot");
+  const animate = window.gsap && !reduce && !small() && document.body.dataset.mode === "desktop";
+  const wasCovered = fromBoot || root.classList.contains("preboot") || root.classList.contains("handoff");
+  if (!animate || !wasCovered) { root.classList.remove("preboot", "handoff"); el.hidden = true; return; }
+  el.hidden = false; // keep the cover up for its fade even though the pre-boot class goes
+  root.classList.remove("preboot", "handoff");
+  const wins = $$(".win:not([hidden])").sort((x, y) => {
+    const a = x.getBoundingClientRect(), b = y.getBoundingClientRect();
+    return Math.round(a.top / 40) - Math.round(b.top / 40) || a.left - b.left;
+  });
+  gsap.to(el, { opacity: 0, duration: fromBoot ? 0.34 : 0.24, ease: "power2.out", onComplete: () => { el.hidden = true; el.style.opacity = ""; } });
+  gsap.from(wins, {
+    opacity: 0, y: 14, scale: 0.985, transformOrigin: "50% 0%", duration: 0.46, ease: "power3.out", delay: fromBoot ? 0.08 : 0.02,
+    stagger: { each: 0.045, ease: "power1.in" }, clearProps: "opacity,transform,transformOrigin",
+  });
 }
 
 async function start() {
@@ -1588,7 +1969,14 @@ async function start() {
   // carry the terminal's phosphor over for visitors who haven't picked an hzOS theme
   const savedTheme = store.get("settings", {}).theme;
   applyTheme((!savedTheme && handoff?.theme && THEMES.includes(handoff.theme)) ? handoff.theme : settings.theme || "lime");
+  applyLook();
+  hydrateIcons();
   APPS.forEach((app) => { enableWindow(win(app)); win(app).hidden = closed.has(app); });
+  win("config").hidden = true; // settings never reopen on their own
+  closed.add("config");
+  if (presets[settings.startLayout] && !small()) applyPresetState(presets[settings.startLayout]);
+  showPane(store.get("cfg.pane", "general"));
+  syncLinksMenu();
   syncLayoutChip();
   syncTermDock();
   relayout();
@@ -1606,14 +1994,11 @@ async function start() {
   renderFortune();
   tick();
   selectFeed(feedSrc);
-  setMode(store.get("mode", "desktop"));
+  setMode(settings.startMode === "last" ? store.get("mode", "desktop") : settings.startMode);
   worldMap = createMap($("#map"), $("#map-pin"));
   loadWx();
 
   await boot();
-  if (window.gsap && !reduce && !document.hidden && !small() && document.body.dataset.mode === "desktop") {
-    gsap.from($$(".win:not([hidden])"), { opacity: 0, y: 10, duration: 0.35, stagger: 0.04, ease: "power2.out", clearProps: "opacity,transform" });
-  }
   log("hzOS ready. type `help`.", "ok");
   armOutTimer(4000);
 }

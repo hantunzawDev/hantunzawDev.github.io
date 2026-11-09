@@ -184,13 +184,14 @@ function terrain(THREE) {
   tex.wrapT = THREE.RepeatWrapping;
   const uniforms = {
     uHist: { value: tex }, uHead: { value: 0 }, uPhase: { value: 0 }, uTime: { value: 0 },
-    uBeat: { value: 0 }, uCell: { value: D / (ROWS - 1) },
+    uBeat: { value: 0 }, uCell: { value: D / (ROWS - 1) }, uNoiseZ: { value: 0 },
   };
+  const NOISE_F = 0.12; // world -> noise frequency for the rolling hills
   const geo = new THREE.PlaneGeometry(W, D, COLS, ROWS - 1).rotateX(-Math.PI / 2).translate(0, 0, -D / 2 + 6);
   const mat = new THREE.ShaderMaterial({
     uniforms, side: THREE.DoubleSide,
     vertexShader: /* glsl */`
-      uniform sampler2D uHist; uniform float uHead, uPhase, uTime, uCell;
+      uniform sampler2D uHist; uniform float uHead, uPhase, uTime, uCell, uNoiseZ;
       varying vec2 vGrid; varying float vH; varying float vDist;
       ${SNOISE}
       void main() {
@@ -199,7 +200,10 @@ function terrain(THREE) {
         float v = texture2D(uHist, vec2((1.0 - fx) * 0.96 + 0.02, row)).r;
         float road = smoothstep(0.05, 0.24, fx);                // flat lane down the middle
         float h = pow(v, 1.35) * 7.5 * (0.3 + fx * 1.15) * road;
-        h += (snoise(vec3(position.xz * 0.12, 0.0)) * 0.5 + 0.5) * 1.6 * fx * fx * road;
+        // hills ride with the data rows: offset by rows pushed so far, so they
+        // scroll with the ground instead of creeping a cell and snapping back
+        vec2 nz = vec2(position.x * ${NOISE_F.toFixed(2)}, position.z * ${NOISE_F.toFixed(2)} - uNoiseZ);
+        h += (snoise(vec3(nz, 0.0)) * 0.5 + 0.5) * 1.6 * fx * fx * road;
         vec3 p = position;
         p.y += h;
         p.z += uPhase * uCell;                                  // smooth scroll between row pushes
@@ -249,27 +253,66 @@ function terrain(THREE) {
   for (let i = 0; i < SN; i++) sp.set([(Math.random() - 0.5) * 220, 6 + Math.random() * 70, -80 - Math.random() * 30], i * 3);
   const sg = new THREE.BufferGeometry();
   sg.setAttribute("position", new THREE.BufferAttribute(sp, 3));
-  const sm = new THREE.PointsMaterial({ color: new THREE.Color(0.35, 0.35, 0.35), size: 1.6, sizeAttenuation: false });
+  // soft round points: hard 1–2px squares crawl pixel to pixel as the camera sways
+  const sm = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uPx: { value: 2.4 } },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: /* glsl */`
+      uniform float uTime, uPx; varying float vA;
+      void main() {
+        float seed = fract(sin(dot(position.xy, vec2(12.9898, 78.233))) * 43758.5453);
+        vA = 0.22 + 0.13 * sin(uTime * (0.4 + seed * 0.8) + seed * 6.283); // slow, out-of-phase twinkle
+        gl_PointSize = uPx;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */`
+      varying float vA;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        gl_FragColor = vec4(vec3(vA * smoothstep(0.5, 0.1, d)), 1.0);
+      }`,
+  });
   scene.add(new THREE.Points(sg, sm));
 
-  let head = 0, acc = 0;
+  // each row is the mean of every frame since the last push (with a little of
+  // the peak kept for punch), not one instantaneous frame: single-frame
+  // snapshots at 12 Hz alias into jagged, flickering ridges
+  const sum = new Float32Array(BANDS), peak = new Float32Array(BANDS);
+  let frames = 0, head = 0, acc = 0, pushed = 0, camY = 2.6, sunBeat = 0;
   return {
     scene, camera, post: true,
+    resize(w, h) { sm.uniforms.uPx.value = 2.4 * Math.min(devicePixelRatio, 1.5); },
     update(dt, t) {
+      for (let i = 0; i < BANDS; i++) { sum[i] += bands[i]; if (bands[i] > peak[i]) peak[i] = bands[i]; }
+      frames++;
       acc += dt * RATE;
       while (acc >= 1) {
         acc -= 1;
         head = (head + 1) % ROWS;
-        for (let i = 0; i < BANDS; i++) hist[head * BANDS + i] = Math.round(bands[i] * 255);
+        pushed++;
+        for (let i = 0; i < BANDS; i++) {
+          const v = frames ? (sum[i] / frames) * 0.7 + peak[i] * 0.3 : bands[i];
+          hist[head * BANDS + i] = Math.round(Math.min(1, v) * 255);
+          sum[i] = peak[i] = 0;
+        }
+        frames = 0;
         tex.needsUpdate = true;
       }
       uniforms.uHead.value = head;
       uniforms.uPhase.value = acc;
+      // simplex repeats every 289 units, so wrap to keep float precision forever
+      uniforms.uNoiseZ.value = (pushed * uniforms.uCell.value * NOISE_F) % 289;
       uniforms.uTime.value = t;
-      uniforms.uBeat.value = sunU.uBeat.value = audio.beat;
+      uniforms.uBeat.value = audio.beat;
+      // ~50 ms attack on the sun swell so the disc blooms on the kick instead of popping
+      sunBeat += (audio.beat - sunBeat) * (1 - Math.exp(-dt * (audio.beat > sunBeat ? 20 : 8)));
+      sunU.uBeat.value = sunBeat;
       sunU.uTime.value = t;
+      sm.uniforms.uTime.value = reduce ? 0 : t;
       const sway = reduce ? 0 : Math.sin(t * 0.23) * 1.2;
-      camera.position.set(sway, 2.6 + audio.bass * 0.6, 9);
+      // damped bob: the whole world shouldn't jitter with every bass wobble
+      camY += (2.6 + audio.bass * 0.6 - camY) * (1 - Math.exp(-dt * 3));
+      camera.position.set(sway, camY, 9);
       camera.lookAt(sway * 0.4, 2.2, -40);
     },
     dispose() { geo.dispose(); mat.dispose(); tex.dispose(); sun.geometry.dispose(); sun.material.dispose(); sg.dispose(); sm.dispose(); },

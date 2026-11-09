@@ -40,16 +40,17 @@
       <div class="menu" data-menu="sys"><button type="button" class="menu__trigger menu__trigger--logo" aria-haspopup="menu" aria-expanded="false">◆ hzOS</button><div class="menu__panel" role="menu" aria-label="hzOS"></div></div>
       <div class="menu" data-menu="apps"><button type="button" class="menu__trigger" aria-haspopup="menu" aria-expanded="false">apps</button><div class="menu__panel" role="menu" aria-label="Apps"></div></div>
       <div class="menu" data-menu="view"><button type="button" class="menu__trigger" aria-haspopup="menu" aria-expanded="false">view</button><div class="menu__panel" role="menu" aria-label="View"></div></div>
+      <div class="menu" data-menu="links" hidden><button type="button" class="menu__trigger" aria-haspopup="menu" aria-expanded="false">links</button><div class="menu__panel" role="menu" aria-label="Links"></div></div>
     </nav>
     <nav class="menubar__apps" id="dock" aria-label="Open windows"></nav>
     <div class="modes" role="radiogroup" aria-label="View mode">
-      <button type="button" role="radio" data-mode="desktop" aria-checked="true" title="desktop (alt+1)"><span aria-hidden="true">▦</span>desktop</button>
-      <button type="button" role="radio" data-mode="focus" aria-checked="false" title="focus (alt+2)"><span aria-hidden="true">◎</span>focus</button>
-      <button type="button" role="radio" data-mode="zen" aria-checked="false" title="zen (alt+3)"><span aria-hidden="true">◌</span>zen</button>
+      <button type="button" role="radio" data-mode="desktop" aria-checked="true" title="desktop (alt+1)"><span class="ico-slot" data-icon="desktop"></span>desktop</button>
+      <button type="button" role="radio" data-mode="focus" aria-checked="false" title="focus (alt+2)"><span class="ico-slot" data-icon="focus"></span>focus</button>
+      <button type="button" role="radio" data-mode="zen" aria-checked="false" title="zen (alt+3)"><span class="ico-slot" data-icon="zen"></span>zen</button>
     </div>
     <div class="menubar__status">
       <span id="st-timer" class="chip chip--amber" hidden></span>
-      <button type="button" class="chip chip--btn" id="layout-tile" title="toggle tiling (alt+t)" aria-pressed="false"><span aria-hidden="true" class="chip__glyph">◱</span><span class="chip__label">float</span></button>
+      <button type="button" class="chip chip--btn" id="layout-tile" title="toggle tiling (alt+t)" aria-pressed="false"><span aria-hidden="true" class="chip__glyph ico-slot" data-icon="float"></span><span class="chip__label">float</span></button>
       <span id="st-wx" class="chip hide-sm">wx:--</span>
       <span id="st-net" class="chip chip--net hide-sm" title="online"><span class="sr-only">online</span></span>
       <span class="menubar__clock"><span id="st-date" class="hide-sm">--</span><time id="st-time">--:--:--</time></span>
@@ -171,48 +172,152 @@
     <section class="win" data-app="config" aria-label="Settings" hidden>
       <header class="win__bar"><span class="win__title">config.ini</span><span class="win__ctrl"><button type="button" data-close aria-label="Close settings">x</button></span></header>
       <form class="win__body config" id="config" autocomplete="off">
-        <p class="prompt">[user]</p>
-        <label>name <input name="name" type="text" maxlength="40"></label>
-        <label>city <input name="city" type="text" maxlength="60" placeholder="Yangon"></label>
-        <label class="row"><input name="h24" type="checkbox"> 24h clock</label>
-        <label>theme
-          <select name="theme">
-            <option value="lime">lime phosphor</option>
-            <option value="amber">amber terminal</option>
-            <option value="ice">ice blue</option>
-            <option value="purple">purple haze</option>
-            <option value="paper">paper white</option>
-          </select>
-        </label>
-        <p class="prompt">[windows]</p>
-        <label class="row"><input name="snap" type="checkbox"> snap to edges &amp; corners</label>
-        <label class="row"><input name="tile" type="checkbox"> tile windows <span class="dim">alt+t · alt+j/k focus · alt+enter master · alt+h/l split</span></label>
-        <p class="prompt">[quotes]</p>
-        <label>rotate
-          <select name="qRotation">
-            <option value="visit">every visit</option>
-            <option value="30m">every 30 min</option>
-            <option value="hourly">hourly</option>
-            <option value="daily">daily</option>
-          </select>
-        </label>
-        <label class="row"><input name="qMatch" type="checkbox"> match time &amp; day (@morning, @mon, @weekend…)</label>
-        <fieldset class="config__packs">
-          <legend>packs</legend>
-          <label class="row"><input name="qp_dev" type="checkbox"> dev</label>
-          <label class="row"><input name="qp_stoic" type="checkbox"> stoic</label>
-          <label class="row"><input name="qp_motivation" type="checkbox"> motivation</label>
-          <label class="row"><input name="qp_rest" type="checkbox"> rest</label>
-        </fieldset>
-        <label class="config__stack" for="cfg-quotes">my quotes <span class="dim">one per line: text -- author @tags</span></label>
-        <textarea id="cfg-quotes" name="qCustom" rows="5" spellcheck="false" placeholder="Ship small, ship daily. -- Han @fri @evening&#10;Coffee first. -- Me @morning @weekday&#10;tags: @morning @afternoon @evening @night · @mon..@sun · @weekday @weekend · @12-25 · @9-12h"></textarea>
-        <p class="prompt">[links] <span class="dim">name | url, one per line</span></p>
-        <label class="sr-only" for="cfg-links">Links</label>
-        <textarea id="cfg-links" name="links" rows="6" spellcheck="false"></textarea>
-        <div class="focus__row">
-          <button type="submit" class="key key--on">save</button>
-          <button type="button" class="key" data-close>cancel</button>
-          <span class="dim">stored in this browser only</span>
+        <nav class="config__nav" role="tablist" aria-label="Settings sections" aria-orientation="vertical">
+          <button type="button" role="tab" data-pane="general" aria-selected="true">general</button>
+          <button type="button" role="tab" data-pane="look" aria-selected="false" tabindex="-1">look</button>
+          <button type="button" role="tab" data-pane="windows" aria-selected="false" tabindex="-1">windows</button>
+          <button type="button" role="tab" data-pane="startup" aria-selected="false" tabindex="-1">startup</button>
+          <button type="button" role="tab" data-pane="links" aria-selected="false" tabindex="-1">links</button>
+          <button type="button" role="tab" data-pane="quotes" aria-selected="false" tabindex="-1">quotes</button>
+          <button type="button" role="tab" data-pane="data" aria-selected="false" tabindex="-1">data</button>
+          <p class="config__saved" id="cfg-saved" aria-live="polite">saved</p>
+        </nav>
+
+        <div class="config__panes">
+          <section class="config__pane" data-pane="general" role="tabpanel" aria-label="General">
+            <h2 class="config__h">[general]</h2>
+            <div class="field"><label for="cfg-name">name</label><input id="cfg-name" name="name" type="text" maxlength="40"><p class="field__hint">used in the greeting and the prompt</p></div>
+            <div class="field"><label for="cfg-city">city</label><input id="cfg-city" name="city" type="text" maxlength="60" placeholder="Yangon"><p class="field__hint">weather fallback when location is off</p></div>
+            <div class="field"><span class="field__label">clock</span>
+              <div class="seg" role="radiogroup" aria-label="Clock format">
+                <label><input type="radio" name="h24" value="true"><span>24h</span></label>
+                <label><input type="radio" name="h24" value="false"><span>12h</span></label>
+              </div>
+            </div>
+            <label class="toggle"><input name="secs" type="checkbox"><span class="toggle__ui"></span><span>seconds in the menubar clock</span></label>
+          </section>
+
+          <section class="config__pane" data-pane="look" role="tabpanel" aria-label="Look" hidden>
+            <h2 class="config__h">[look]</h2>
+            <div class="field field--stack"><span class="field__label">theme</span>
+              <div class="swatches" role="radiogroup" aria-label="Theme">
+                <label class="swatch" data-t="lime"><input type="radio" name="theme" value="lime"><span class="swatch__chip"></span><span>lime</span></label>
+                <label class="swatch" data-t="amber"><input type="radio" name="theme" value="amber"><span class="swatch__chip"></span><span>amber</span></label>
+                <label class="swatch" data-t="ice"><input type="radio" name="theme" value="ice"><span class="swatch__chip"></span><span>ice</span></label>
+                <label class="swatch" data-t="purple"><input type="radio" name="theme" value="purple"><span class="swatch__chip"></span><span>purple</span></label>
+                <label class="swatch" data-t="paper"><input type="radio" name="theme" value="paper"><span class="swatch__chip"></span><span>paper</span></label>
+              </div>
+            </div>
+            <label class="toggle"><input name="crt" type="checkbox"><span class="toggle__ui"></span><span>CRT scanlines &amp; vignette</span></label>
+            <label class="toggle"><input name="glow" type="checkbox"><span class="toggle__ui"></span><span>phosphor glow</span></label>
+            <div class="field"><span class="field__label">motion</span>
+              <div class="seg" role="radiogroup" aria-label="Motion">
+                <label><input type="radio" name="motion" value="auto"><span>system</span></label>
+                <label><input type="radio" name="motion" value="full"><span>full</span></label>
+                <label><input type="radio" name="motion" value="reduced"><span>reduced</span></label>
+              </div>
+            </div>
+          </section>
+
+          <section class="config__pane" data-pane="windows" role="tabpanel" aria-label="Windows" hidden>
+            <h2 class="config__h">[windows]</h2>
+            <label class="toggle"><input name="snap" type="checkbox"><span class="toggle__ui"></span><span>snap to edges &amp; corners</span></label>
+            <label class="toggle"><input name="tile" type="checkbox"><span class="toggle__ui"></span><span>tile windows <kbd>⌥T</kbd></span></label>
+            <div class="field"><label for="cfg-mfact">master</label><div class="range"><input id="cfg-mfact" name="mfact" type="range" min="0.2" max="0.8" step="0.05"><output for="cfg-mfact" data-out="mfact"></output></div></div>
+            <div class="field"><label for="cfg-gap">gap</label><div class="range"><input id="cfg-gap" name="gap" type="range" min="0" max="24" step="2"><output for="cfg-gap" data-out="gap"></output></div></div>
+
+            <h3 class="config__sub">open now</h3>
+            <div class="appgrid" id="cfg-apps"></div>
+
+            <h3 class="config__sub">saved layouts <span class="dim">positions, open windows, tiling</span></h3>
+            <div class="presets" id="cfg-presets"></div>
+            <div class="inline-add">
+              <label class="sr-only" for="cfg-preset-name">Layout name</label>
+              <input id="cfg-preset-name" type="text" maxlength="24" placeholder="name this layout, e.g. work">
+              <button type="button" class="key key--icon" id="cfg-preset-save"><span class="ico-slot" data-icon="save"></span>save current</button>
+            </div>
+            <button type="button" class="key key--ghost" id="cfg-layout-reset">reset to default layout</button>
+          </section>
+
+          <section class="config__pane" data-pane="startup" role="tabpanel" aria-label="Startup" hidden>
+            <h2 class="config__h">[startup]</h2>
+            <div class="field"><label for="cfg-boot">boot screen</label>
+              <select id="cfg-boot" name="bootMode">
+                <option value="daily">first open of the day</option>
+                <option value="session">every new browser session</option>
+                <option value="always">every time</option>
+                <option value="never">never</option>
+              </select>
+            </div>
+            <div class="field"><span class="field__label">boot speed</span>
+              <div class="seg" role="radiogroup" aria-label="Boot speed">
+                <label><input type="radio" name="bootSpeed" value="slow"><span>slow</span></label>
+                <label><input type="radio" name="bootSpeed" value="normal"><span>normal</span></label>
+                <label><input type="radio" name="bootSpeed" value="fast"><span>fast</span></label>
+              </div>
+            </div>
+            <div class="field"><label for="cfg-startmode">open in</label>
+              <select id="cfg-startmode" name="startMode">
+                <option value="last">last mode used</option>
+                <option value="desktop">desktop</option>
+                <option value="focus">focus</option>
+                <option value="zen">zen</option>
+              </select>
+            </div>
+            <div class="field"><label for="cfg-startwin">windows</label>
+              <select id="cfg-startwin" name="startLayout"></select>
+            </div>
+            <p class="field__hint field__hint--block">pick a saved layout to open the same windows in the same places every time. make one under windows.</p>
+            <button type="button" class="key key--icon" id="cfg-boot-test"><span class="ico-slot" data-icon="play"></span>preview boot</button>
+          </section>
+
+          <section class="config__pane" data-pane="links" role="tabpanel" aria-label="Links" hidden>
+            <h2 class="config__h">[links]</h2>
+            <p class="field__hint field__hint--block">shown in the <b>links</b> menu and opened by typing their name on the command line.</p>
+            <ol class="links" id="cfg-links"></ol>
+            <button type="button" class="key key--icon" id="cfg-link-add"><span class="ico-slot" data-icon="plus"></span>add link</button>
+            <label class="toggle"><input name="linksMenu" type="checkbox"><span class="toggle__ui"></span><span>show the links menu in the menubar</span></label>
+            <label class="toggle"><input name="linksNewTab" type="checkbox"><span class="toggle__ui"></span><span>open links in a new tab</span></label>
+          </section>
+
+          <section class="config__pane" data-pane="quotes" role="tabpanel" aria-label="Quotes" hidden>
+            <h2 class="config__h">[quotes]</h2>
+            <div class="field"><label for="cfg-qrot">rotate</label>
+              <select id="cfg-qrot" name="qRotation">
+                <option value="visit">every visit</option>
+                <option value="30m">every 30 min</option>
+                <option value="hourly">hourly</option>
+                <option value="daily">daily</option>
+              </select>
+            </div>
+            <label class="toggle"><input name="qMatch" type="checkbox"><span class="toggle__ui"></span><span>match time &amp; day <span class="dim">@morning @mon @weekend</span></span></label>
+            <div class="field field--stack"><span class="field__label">packs</span>
+              <div class="chips">
+                <label class="pill"><input name="qp_dev" type="checkbox"><span>dev</span></label>
+                <label class="pill"><input name="qp_stoic" type="checkbox"><span>stoic</span></label>
+                <label class="pill"><input name="qp_motivation" type="checkbox"><span>motivation</span></label>
+                <label class="pill"><input name="qp_rest" type="checkbox"><span>rest</span></label>
+              </div>
+            </div>
+            <div class="field field--stack"><label for="cfg-quotes">my quotes <span class="dim">one per line: text -- author @tags</span></label>
+              <textarea id="cfg-quotes" name="qCustom" rows="6" spellcheck="false" placeholder="Ship small, ship daily. -- Han @fri @evening&#10;Coffee first. -- Me @morning @weekday"></textarea>
+              <p class="field__hint">tags: @morning @afternoon @evening @night · @mon..@sun · @weekday @weekend · @12-25 · @9-12h</p>
+            </div>
+          </section>
+
+          <section class="config__pane" data-pane="data" role="tabpanel" aria-label="Data" hidden>
+            <h2 class="config__h">[data]</h2>
+            <p class="field__hint field__hint--block">everything lives in this browser's local storage. export it to move hzOS to another machine.</p>
+            <div class="btnrow">
+              <button type="button" class="key key--icon" id="cfg-export"><span class="ico-slot" data-icon="save"></span>export backup</button>
+              <label class="key key--icon key--file"><span class="ico-slot" data-icon="up"></span>import backup<input type="file" id="cfg-import" accept="application/json,.json"></label>
+            </div>
+            <h3 class="config__sub config__sub--danger">danger zone</h3>
+            <div class="btnrow">
+              <button type="button" class="key key--danger" id="cfg-reset-settings">reset settings</button>
+              <button type="button" class="key key--danger" id="cfg-reset-all">wipe everything</button>
+            </div>
+          </section>
         </div>
       </form>
     </section>
@@ -253,7 +358,7 @@
       <label for="cmd-input"><span class="cmd__ps">han@hzos</span>:<span class="cmd__cwd">~</span>$</label>
       <input id="cmd-input" type="text" spellcheck="false" autocapitalize="off" placeholder="type help, a command, or anything to search">
       <kbd class="hide-sm">/</kbd>
-      <button type="button" class="cmd__pop hide-sm" id="cmd-pop" title="open as a window">⧉</button>
+      <button type="button" class="cmd__pop hide-sm" id="cmd-pop" title="open as a window" aria-label="Open the command line as a window"><span class="ico-slot" data-icon="pop"></span></button>
     </form>
   </footer>
 
