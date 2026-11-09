@@ -1,6 +1,7 @@
 // bughunt.exe: a small raycasting shooter. Clear the bugs out of each sector,
 // then walk into the exit. Mounts like the other games and returns { stop }.
 import { store } from "./data.js";
+import { sfx, score as soundtrack, place } from "./fpsaudio.js";
 
 // # wall · % alt wall · X exit (opens when every bug is dead)
 // P player · E bug · H patch (+hp) · A cells (+ammo) · everything else is floor
@@ -93,6 +94,9 @@ export function bughunt(root, { setMeta, log }) {
   let shootCd = 0, flash = 0, hurt = 0, banner = 0, bob = 0, showMap = false, msg = "", msgT = 0;
   let raf = 0, last = 0, dirty = true, focused = false;
   let touch = null, touchMove = 0;
+  // feel: screen shake, hit markers, debris, enemy tracers, damage direction
+  let shake = 0, shakeMag = 0, hitMark = 0, killMark = false, fade = 0;
+  let parts = [], zaps = [], dmgDirs = [], stepIdx = 0, heartT = 0;
 
   /* ---------- palette + sprites follow the current theme ---------- */
   function readPalette() {
@@ -122,6 +126,11 @@ export function bughunt(root, { setMeta, log }) {
   function buildSprites() {
     sprites.bug = sprite((g) => bug(g, pal.red, pal.text));
     sprites.hit = sprite((g) => bug(g, pal.text, pal.red));
+    sprites.charge = sprite((g) => { // windup tell: the eye goes hot before it fires
+      bug(g, pal.red, pal.alt);
+      g.fillStyle = str(pal.text); g.fillRect(14, 14, 4, 4);
+      g.fillStyle = str(mix(pal.alt, pal.bg, 0.4)); g.fillRect(9, 10, 14, 2); g.fillRect(9, 19, 14, 2);
+    });
     sprites.dead = sprite((g) => {
       g.fillStyle = str(mix(pal.red, pal.bg, 0.45)); g.fillRect(5, 26, 22, 4); g.fillRect(9, 24, 14, 2);
       g.fillStyle = str(mix(pal.red, pal.bg, 0.2)); g.fillRect(12, 25, 3, 2); g.fillRect(19, 27, 4, 2);
@@ -143,15 +152,16 @@ export function bughunt(root, { setMeta, log }) {
     ents = [];
     grid = L.map.map((row, y) => [...row].map((ch, x) => {
       if (ch === "P") P = { x: x + 0.5, y: y + 0.5, a: 0 };
-      else if (ch === "E") ents.push({ kind: "bug", x: x + 0.5, y: y + 0.5, hp: 2 + Math.min(i, 2), cd: 1 + Math.random(), hit: 0, awake: false, ph: Math.random() * 6 });
-      else if (ch === "H" || ch === "A") ents.push({ kind: ch, x: x + 0.5, y: y + 0.5 });
+      else if (ch === "E") ents.push({ kind: "bug", x: x + 0.5, y: y + 0.5, hp: 2 + Math.min(i, 2), cd: 1 + Math.random(), hit: 0, awake: false, ph: Math.random() * 6, wind: 0, chT: 1 + Math.random() * 2 });
+      else if (ch === "H" || ch === "A") ents.push({ kind: ch, x: x + 0.5, y: y + 0.5, ph: Math.random() * 6 });
       return "#%X".includes(ch) ? ch : ".";
     }));
     // face the most open direction from the start
     let bestA = 0, bestD = 0;
     for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4, d = rayDist(P.x, P.y, a); if (d > bestD) { bestD = d; bestA = a; } }
     P.a = bestA;
-    banner = 2.2; dirty = true;
+    banner = 2.2; fade = 0.6; dirty = true;
+    parts = []; zaps = []; dmgDirs = [];
   }
   const cell = (x, y) => grid[y | 0]?.[x | 0] ?? "#";
   const solid = (x, y) => cell(x, y) !== ".";
@@ -162,7 +172,22 @@ export function bughunt(root, { setMeta, log }) {
     for (let i = 1; i < n; i++) if (solid(ax + (dx * i) / n, ay + (dy * i) / n)) return false;
     return true;
   }
-  function newGame() { score = 0; hp = 100; ammo = 30; load(0); state = "play"; say("find and squash every bug, then take the exit."); }
+  function newGame() {
+    score = 0; hp = 100; ammo = 30; load(0); state = "play";
+    say("find and squash every bug, then take the exit.");
+    sfx.unlock(); sfx.start();
+    soundtrack.sector(0);
+  }
+  function addShake(mag, secs) { if (reduce) return; shakeMag = shake > 0 ? Math.max(shakeMag, mag) : mag; shake = Math.max(shake, secs); }
+  // debris in world space: z is height (0 floor, 1 ceiling)
+  function spray(e, n, colors, power = 1) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, s = (0.3 + Math.random() * 0.8) * power;
+      parts.push({ x: e.x, y: e.y, z: 0.25 + Math.random() * 0.2, vx: Math.cos(a) * s, vy: Math.sin(a) * s, vz: 0.4 + Math.random() * 0.9 * power,
+        life: 0.5 + Math.random() * 0.7, c: colors[i % colors.length], sz: 0.012 + Math.random() * 0.012 });
+    }
+    if (parts.length > 160) parts.splice(0, parts.length - 160);
+  }
   function say(t) { msg = t; msgT = 3; }
 
   /* ---------- movement ---------- */
@@ -187,44 +212,86 @@ export function bughunt(root, { setMeta, log }) {
     const len = Math.hypot(fwd, str8);
     if (len > 1) { mx /= len; my /= len; }
     if (mx || my) {
-      bob += dt * 9;
+      bob += dt * (k("shift") ? 11 : 9);
+      const si = Math.floor(bob / Math.PI);
+      if (si !== stepIdx) { stepIdx = si; sfx.step(si & 1); }
       if (tryMove(P, mx, my) === "X") {
         const left = bugsLeft();
-        if (left) { if (msgT < 1) say(`exit locked · ${left} bug${left > 1 ? "s" : ""} left`); }
+        if (left) { if (msgT < 1) { say(`exit locked · ${left} bug${left > 1 ? "s" : ""} left`); sfx.locked(); } }
         else return nextLevel();
       }
     }
     if ((k(" ") || k("f")) && shootCd <= 0) fire();
-    shootCd -= dt; flash -= dt; hurt -= dt; banner -= dt; msgT -= dt;
+    shootCd -= dt; flash -= dt; hurt -= dt; banner -= dt; msgT -= dt; hitMark -= dt; fade -= dt;
+    if (shake > 0) { shake -= dt; shakeMag *= Math.exp(-dt * 6); }
 
+    // only two bugs may be winding up a shot at once: a crowd is pressure, not a firing squad
+    let committed = 0, near = 0;
+    for (const e of ents) if (e.kind === "bug" && e.hp > 0 && e.wind > 0) committed++;
     for (const e of ents) {
       if (e.kind !== "bug") {
+        e.ph += dt * 3;
         if (!e.taken && Math.hypot(e.x - P.x, e.y - P.y) < 0.55) {
-          if (e.kind === "H" && hp < 100) { hp = Math.min(100, hp + 25); e.taken = true; say("+25 hp · patch applied"); }
-          if (e.kind === "A") { ammo += 12; e.taken = true; say("+12 cells"); }
+          if (e.kind === "H" && hp < 100) { hp = Math.min(100, hp + 25); e.taken = true; say("+25 hp · patch applied"); sfx.pickupHp(); spray(e, 8, [pal.wall, pal.text], 0.5); }
+          if (e.kind === "A") { ammo += 12; e.taken = true; say("+12 cells"); sfx.pickupAmmo(); spray(e, 8, [pal.alt, pal.text], 0.5); }
         }
         continue;
       }
       if (e.hp <= 0) continue;
-      e.hit -= dt; e.ph += dt * 4;
+      e.hit -= dt; e.ph += dt * (e.wind > 0 ? 14 : 4);
       const dx = P.x - e.x, dy = P.y - e.y, d = Math.hypot(dx, dy);
       const see = d < 11 && sight(e.x, e.y, P.x, P.y);
-      if (see && !e.awake) { e.awake = true; e.cd = 0.6 + Math.random() * 0.6; }
+      if (see && !e.awake) { e.awake = true; e.cd = 0.6 + Math.random() * 0.6; sfx.alert(place(P, e.x, e.y)); }
       if (!e.awake) continue;
-      if (d > 0.9 && e.hit <= 0) tryMove(e, (dx / d) * 1.25 * dt, (dy / d) * 1.25 * dt);
+      if (d < 8) near++;
+      if (d < 7 && (e.chT -= dt) <= 0) { e.chT = 1.4 + Math.random() * 1.8; if (e.wind <= 0) sfx.chitter(place(P, e.x, e.y)); }
+      if (d > 0.9 && e.hit <= 0 && e.wind <= 0) tryMove(e, (dx / d) * 1.25 * dt, (dy / d) * 1.25 * dt);
+      if (e.wind > 0) { // telegraphed attack resolves
+        e.wind -= dt;
+        if (e.wind <= 0) {
+          e.cd = 1.1 + Math.random() * 0.9;
+          const melee = d < 1.2;
+          const chance = !see ? 0 : melee ? 0.9 : clamp(0.8 - d * 0.06, 0.25, 0.8);
+          const landed = Math.random() < chance;
+          sfx.zap(place(P, e.x, e.y));
+          zaps.push({ e, t: 0.12, hit: landed, off: (Math.random() < 0.5 ? -1 : 1) * (0.25 + Math.random() * 0.35) });
+          if (landed) damage(melee ? 12 : 6 + Math.floor(Math.random() * 6), e);
+          if (state !== "play") return;
+        }
+        continue;
+      }
       e.cd -= dt;
-      if (e.cd <= 0 && see) {
-        e.cd = 1.1 + Math.random() * 0.9;
-        const chance = d < 1.2 ? 0.9 : clamp(0.8 - d * 0.06, 0.25, 0.8);
-        if (Math.random() < chance) damage(d < 1.2 ? 12 : 6 + Math.floor(Math.random() * 6));
+      if (e.cd <= 0 && see && committed < 2) {
+        e.wind = d < 1.2 ? 0.28 : 0.42; committed++;
+        sfx.charge(place(P, e.x, e.y), e.wind);
       }
     }
+
+    // debris physics
+    for (const p of parts) {
+      p.life -= dt; p.vz -= 4.5 * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      if (solid(p.x, p.y)) { p.x -= p.vx * dt; p.y -= p.vy * dt; p.vx *= -0.4; p.vy *= -0.4; }
+      if (p.z < 0) { p.z = 0; p.vz *= -0.3; p.vx *= 0.6; p.vy *= 0.6; }
+    }
+    parts = parts.filter((p) => p.life > 0);
+    for (const z of zaps) z.t -= dt;
+    zaps = zaps.filter((z) => z.t > 0);
+    for (const dd of dmgDirs) dd.t -= dt;
+    dmgDirs = dmgDirs.filter((dd) => dd.t > 0);
+
+    if (hp <= 30 && (heartT -= dt) <= 0) { heartT = 0.55 + hp / 60; sfx.heartbeat(); }
+    soundtrack.intensity(clamp(near / 3, 0, 1), clamp((50 - hp) / 50, 0, 1), dt);
     dirty = true;
   }
-  function damage(n) {
+  function damage(n, from) {
     hp -= n; hurt = 0.25;
+    addShake(n >= 12 ? 5 : 3, 0.3);
+    sfx.hurt(n >= 12);
+    if (from) dmgDirs.push({ a: Math.atan2(from.y - P.y, from.x - P.x), t: 0.8 });
     if (hp <= 0) {
       hp = 0; state = "dead"; document.exitPointerLock?.();
+      sfx.death(); soundtrack.release(1.6);
       record();
     }
   }
@@ -233,15 +300,21 @@ export function bughunt(root, { setMeta, log }) {
   }
   function nextLevel() {
     score += 500 + hp;
-    if (lvl + 1 >= LEVELS.length) { state = "won"; document.exitPointerLock?.(); record(); return; }
+    if (lvl + 1 >= LEVELS.length) {
+      state = "won"; document.exitPointerLock?.(); record();
+      sfx.win(); soundtrack.sector(0, true);
+      return;
+    }
     load(lvl + 1);
     ammo += 10;
+    sfx.clear(); soundtrack.sector(lvl);
     log?.(`bughunt: ${LEVELS[lvl - 1].name} clear.`, "ok");
   }
   function fire() {
     if (state !== "play") return;
-    if (ammo <= 0) { if (msgT < 1) say("out of cells · find ammo"); shootCd = 0.4; return; }
+    if (ammo <= 0) { if (msgT < 1) say("out of cells · find ammo"); sfx.dry(); shootCd = 0.4; return; }
     ammo--; shootCd = 0.3; flash = 0.08;
+    sfx.shoot(); addShake(1.2, 0.08);
     const cx = W / 2;
     let target = null, tDepth = Infinity;
     for (const e of ents) {
@@ -252,7 +325,15 @@ export function bughunt(root, { setMeta, log }) {
     }
     if (target) {
       target.hp--; target.hit = 0.15; target.awake = true;
-      if (target.hp <= 0) { score += 100; const left = bugsLeft(); say(left ? `bug squashed · ${left} left` : "sector clean · exit is open"); }
+      const at = place(P, target.x, target.y);
+      hitMark = 0.14; killMark = target.hp <= 0;
+      if (target.hp <= 0) {
+        target.wind = 0; score += 100;
+        sfx.kill(at); spray(target, 16, [pal.red, pal.text, pal.alt], 1.1);
+        const left = bugsLeft();
+        say(left ? `bug squashed · ${left} left` : "sector clean · exit is open");
+        if (!left) setTimeout(() => { if (raf && state === "play") sfx.exitOpen(); }, 260);
+      } else { sfx.hit(at, target.hp); spray(target, 5, [pal.red, pal.text], 0.6); }
     }
   }
 
@@ -279,6 +360,7 @@ export function bughunt(root, { setMeta, log }) {
     const dirX = Math.cos(P.a), dirY = Math.sin(P.a), plX = -dirY * 0.66, plY = dirX * 0.66;
     const exitOpen = !bugsLeft(), pulse = 0.5 + 0.5 * Math.sin(performance.now() / 220);
     const mortar = pal.light ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.4)";
+    const muzzle = flash > 0 ? flash / 0.08 : 0; // the shot lights up the nearby walls
     for (let x = 0; x < W; x++) {
       const cam = (2 * x) / W - 1, rx = dirX + plX * cam, ry = dirY + plY * cam;
       let mx = P.x | 0, my = P.y | 0;
@@ -297,6 +379,7 @@ export function bughunt(root, { setMeta, log }) {
       const lh = H / dist, top = horizon - lh / 2;
       let base = t === "%" ? pal.alt : t === "X" ? (exitOpen ? mix(pal.text, pal.wall, pulse) : pal.hi) : pal.wall;
       base = mix(base, pal.light ? [255, 255, 255] : [0, 0, 0], side ? 0.3 : 0.08);
+      if (muzzle) base = mix(base, pal.alt, muzzle * 0.45 * clamp(1 - dist / 6, 0, 1) * (1 - Math.abs(cam) * 0.5));
       ctx.fillStyle = str(mix(base, fog, clamp(dist / 9, 0, 0.92)));
       ctx.fillRect(x, top, 1, lh + 1);
       if (dist < 7) {
@@ -324,10 +407,11 @@ export function bughunt(root, { setMeta, log }) {
     }
     list.sort((a, b) => b[1].depth - a[1].depth);
     for (const [e, p] of list) {
-      const img = e.kind === "bug" ? (e.hp <= 0 ? sprites.dead : e.hit > 0 ? sprites.hit : sprites.bug) : sprites[e.kind];
-      const scale = e.kind === "bug" ? 0.8 : 0.45;
+      const winding = e.kind === "bug" && e.hp > 0 && e.wind > 0;
+      const img = e.kind === "bug" ? (e.hp <= 0 ? sprites.dead : e.hit > 0 ? sprites.hit : winding && Math.sin(e.ph) > -0.3 ? sprites.charge : sprites.bug) : sprites[e.kind];
+      const scale = e.kind === "bug" ? (winding ? 0.86 : 0.8) : 0.45;
       const size = p.size * scale, floorY = horizon + p.size / 2;
-      const hover = e.kind === "bug" && e.hp > 0 && !reduce ? Math.sin(e.ph) * p.size * 0.03 : 0;
+      const hover = reduce ? 0 : e.kind === "bug" ? (e.hp > 0 ? Math.sin(e.ph) * p.size * (winding ? 0.012 : 0.03) : 0) : (Math.sin(e.ph) - 1) * p.size * 0.04;
       const y = floorY - size + hover, x0 = Math.round(p.sx - size / 2);
       const shade = clamp(p.depth / 9, 0, 0.85);
       for (let sx = Math.max(0, x0); sx < Math.min(W, x0 + size); sx++) {
@@ -342,13 +426,23 @@ export function bughunt(root, { setMeta, log }) {
       }
     }
 
+    drawParts(horizon);
+    drawZaps(horizon);
     drawWeapon();
-    // crosshair
-    ctx.fillStyle = str(pal.text);
-    ctx.fillRect(W / 2 - 4, H / 2, 3, 1); ctx.fillRect(W / 2 + 2, H / 2, 3, 1);
-    ctx.fillRect(W / 2, H / 2 - 4, 1, 3); ctx.fillRect(W / 2, H / 2 + 2, 1, 3);
-    if (hurt > 0) { ctx.fillStyle = `rgba(${pal.red.join(",")},${0.35 * (hurt / 0.25)})`; ctx.fillRect(0, 0, W, H); }
+    drawCrosshair();
+    if (hurt > 0) { ctx.fillStyle = `rgba(${pal.red.join(",")},${0.3 * (hurt / 0.25)})`; ctx.fillRect(0, 0, W, H); }
+    drawDamageDirs();
+    if (state === "play" && hp <= 30) { // low hp: the edges bleed in time with the heartbeat
+      const beat = reduce ? 0.6 : 0.5 + 0.5 * Math.sin(performance.now() / (120 + hp * 6));
+      const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, W * 0.62);
+      vg.addColorStop(0, "rgba(0,0,0,0)");
+      vg.addColorStop(1, `rgba(${pal.red.join(",")},${(0.18 + 0.22 * beat) * (1 - hp / 40)})`);
+      ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+    }
+    if (fade > 0 && state === "play") { ctx.fillStyle = `rgba(${pal.bg.join(",")},${clamp(fade / 0.6, 0, 1)})`; ctx.fillRect(0, 0, W, H); }
     if (showMap) drawMap();
+    // shake is a temporary offset on the whole view, never on the aim
+    canvas.style.transform = state === "play" && focused && shake > 0 && shakeMag > 0.2 ? `translate(${((Math.random() * 2 - 1) * shakeMag).toFixed(1)}px,${((Math.random() * 2 - 1) * shakeMag).toFixed(1)}px)` : "";
     text(banner > 0 && state === "play" ? LEVELS[lvl].name : "", H * 0.22, 11);
     if (msgT > 0 && state === "play") text(msg, H - 10, 8, 0.85);
     if (state !== "play" || !focused) overlay();
@@ -356,16 +450,78 @@ export function bughunt(root, { setMeta, log }) {
   }
   function drawWeapon() {
     const sway = reduce ? 0 : Math.sin(bob * 0.5) * 4, lift = reduce ? 0 : Math.abs(Math.cos(bob * 0.5)) * 3;
-    const kick = shootCd > 0.2 ? 5 : 0;
-    const x = W / 2 + sway - 14, y = H - 34 + lift + kick;
+    // recoil: snaps back on the shot, eases home over the cooldown
+    const kick = shootCd > 0 ? Math.pow(shootCd / 0.3, 2) * 7 : 0;
+    const x = Math.round(W / 2 + sway - 14), y = Math.round(H - 34 + lift + kick);
     if (flash > 0) {
-      ctx.fillStyle = str(pal.alt); ctx.fillRect(x + 8, y - 12, 12, 10);
-      ctx.fillStyle = str(pal.text); ctx.fillRect(x + 11, y - 9, 6, 5);
+      const f = flash / 0.08;
+      const glow = ctx.createRadialGradient(x + 14, y - 6, 0, x + 14, y - 6, 34 * f + 6);
+      glow.addColorStop(0, `rgba(${pal.alt.join(",")},${0.55 * f})`); glow.addColorStop(1, `rgba(${pal.alt.join(",")},0)`);
+      ctx.fillStyle = glow; ctx.fillRect(x - 30, y - 50, 88, 70);
+      ctx.fillStyle = str(pal.alt); ctx.fillRect(x + 7, y - 13, 14, 11); ctx.fillRect(x + 4, y - 9, 20, 4);
+      ctx.fillStyle = str(pal.text); ctx.fillRect(x + 11, y - 10, 6, 6);
     }
     ctx.fillStyle = str(pal.hi); ctx.fillRect(x + 6, y, 16, 34);
     ctx.fillStyle = str(pal.muted); ctx.fillRect(x + 10, y - 2, 8, 30);
-    ctx.fillStyle = str(pal.wall); ctx.fillRect(x + 12, y + 6, 4, 4);
+    // cell meter on the barrel: the gun tells you when it's running dry
+    const cells = clamp(Math.ceil(ammo / 6), 0, 5);
+    for (let i = 0; i < 5; i++) {
+      ctx.fillStyle = i < cells ? str(ammo <= 5 ? pal.red : pal.wall) : str(mix(pal.muted, pal.bg, 0.5));
+      ctx.fillRect(x + 12, y + 14 - i * 3, 4, 2);
+    }
     ctx.fillStyle = str(pal.line); ctx.fillRect(x, y + 18, 28, 16);
+    ctx.fillStyle = str(mix(pal.line, pal.hi, 0.5)); ctx.fillRect(x, y + 18, 28, 1);
+  }
+  function drawCrosshair() {
+    const gap = 2 + (shootCd > 0 ? (shootCd / 0.3) * 3 : 0), cx = W / 2, cy = H / 2;
+    ctx.fillStyle = str(pal.text);
+    ctx.fillRect(cx - gap - 3, cy, 3, 1); ctx.fillRect(cx + gap + 1, cy, 3, 1);
+    ctx.fillRect(cx, cy - gap - 3, 1, 3); ctx.fillRect(cx, cy + gap + 1, 1, 3);
+    if (hitMark > 0) { // hit marker: diagonal ticks, red and wider on a kill
+      const r = killMark ? 7 : 5, s = killMark ? 3 : 2;
+      ctx.fillStyle = str(killMark ? pal.red : pal.text);
+      for (let i = 0; i < s; i++) for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) ctx.fillRect(cx + dx * (r - i) - (dx < 0 ? 1 : 0), cy + dy * (r - i) - (dy < 0 ? 1 : 0), 1, 1);
+    }
+  }
+  function drawParts(horizon) {
+    for (const p of parts) {
+      const q = project(p);
+      if (!q || q.depth < 0.35) continue;
+      const sx = q.sx | 0;
+      if (sx < 0 || sx >= W || q.depth >= zbuf[sx]) continue;
+      const sz = clamp(Math.round(q.size * p.sz), 1, 3);
+      ctx.globalAlpha = clamp(p.life * 2, 0, 1) * (1 - clamp(q.depth / 9, 0, 0.8));
+      ctx.fillStyle = str(p.c);
+      ctx.fillRect(sx, Math.round(horizon + (0.5 - p.z) * q.size), sz, sz);
+    }
+    ctx.globalAlpha = 1;
+  }
+  // bug shots: a short beam from the eye, into the view on a hit, past you on a miss
+  function drawZaps(horizon) {
+    for (const z of zaps) {
+      const q = project(z.e);
+      const a = clamp(z.t / 0.12, 0, 1);
+      let x0, y0;
+      if (q && q.depth < zbuf[clamp(q.sx | 0, 0, W - 1)]) { x0 = q.sx; y0 = horizon + q.size * 0.5 - q.size * 0.8 * 0.55; }
+      else continue; // fired from out of view: the damage arc tells you where
+      const x1 = z.hit ? W / 2 + (x0 - W / 2) * 0.15 : W / 2 + z.off * W, y1 = H + 4;
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = str(pal.red); ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      ctx.strokeStyle = str(pal.text); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+  function drawDamageDirs() {
+    for (const dd of dmgDirs) {
+      let rel = dd.a - P.a; rel = Math.atan2(Math.sin(rel), Math.cos(rel));
+      const ang = -Math.PI / 2 + rel, r = Math.min(W, H) * 0.36;
+      ctx.globalAlpha = clamp(dd.t / 0.8, 0, 1) * 0.9;
+      ctx.strokeStyle = str(pal.red); ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(W / 2, H / 2, r, ang - 0.32, ang + 0.32); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
   }
   function drawMap() {
     const s = Math.max(2, Math.floor(Math.min(W, H) * 0.45 / Math.max(grid.length, grid[0].length))), ox = 6, oy = 6;
@@ -396,19 +552,38 @@ export function bughunt(root, { setMeta, log }) {
       dead: ["segfault · you died", `score ${score} · space to retry`],
       won: ["all sectors clean", `score ${score} · best ${best} · space`],
     }[state] || ["paused", "click to resume"];
-    text(lines[0], H / 2 - 9, 12);
-    text(lines[1], H / 2 + 11, 8, 0.85);
+    text(lines[0], H / 2 - 12, 12);
+    text(lines[1], H / 2 + 6, 8, 0.85);
+    text(soundLabel(), H / 2 + 19, 6, 0.55);
+  }
+  function soundLabel() {
+    if (sfx.muted && soundtrack.muted) return "sound off · n to turn on";
+    if (soundtrack.muted) return "sfx only · n to cycle sound";
+    return "score by noise.app · n to cycle sound";
+  }
+  // n cycles: music + sfx → sfx only → silent → music + sfx
+  function cycleSound() {
+    if (!soundtrack.muted) { soundtrack.setMuted(true); say("music off · sfx on"); }
+    else if (!sfx.muted) { sfx.setMuted(true); say("sound off"); }
+    else {
+      sfx.setMuted(false); soundtrack.setMuted(false); sfx.unlock(); sfx.start(); say("sound on · score by noise.app");
+      if (state === "play") soundtrack.sector(lvl);
+      else if (state === "won") soundtrack.sector(0, true);
+    }
+    dirty = true;
   }
   function hudUpdate() {
-    const cur = `${hp}|${ammo}|${bugsLeft()}|${score}|${lvl}`;
+    const snd = soundtrack.muted ? (sfx.muted ? "off" : "sfx") : "on";
+    const cur = `${hp}|${ammo}|${bugsLeft()}|${score}|${lvl}|${snd}`;
     if (hud.dataset.v === cur) return;
     hud.dataset.v = cur;
+    const warn = (on) => (on ? "warn" : "");
     hud.replaceChildren(
-      h("span", {}, "hp ", h("b", { textContent: hp })),
-      h("span", {}, "cells ", h("b", { textContent: ammo })),
+      h("span", { className: warn(hp <= 30) }, "hp ", h("b", { textContent: hp })),
+      h("span", { className: warn(ammo <= 5) }, "cells ", h("b", { textContent: ammo })),
       h("span", {}, "bugs ", h("b", { textContent: bugsLeft() })),
       h("span", {}, "score ", h("b", { textContent: score })),
-      h("span", { className: "dim", textContent: "wasd · mouse · space · m" }),
+      h("span", { className: "dim", textContent: `m map · n ♪ ${snd}` }),
     );
     setMeta?.(`${LEVELS[lvl].name.split(" · ")[0]} · ${score}`);
   }
@@ -442,14 +617,15 @@ export function bughunt(root, { setMeta, log }) {
     const k = e.key.toLowerCase();
     if (k === " " && state !== "play") { e.preventDefault(); start(); dirty = true; return; }
     if (k === "m") { showMap = !showMap; dirty = true; }
+    if (k === "n" && !e.repeat) cycleSound();
     if ((k === " " || k === "f") && !e.repeat && shootCd <= 0) fire(); // quick taps can land between frames
     if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
     keys.add(k);
   }
   const onKeyUp = (e) => keys.delete(e.key.toLowerCase());
   const onMouse = (e) => { if (document.pointerLockElement === canvas && state === "play") P.a += e.movementX * 0.0025; };
-  canvas.addEventListener("focus", () => { focused = true; dirty = true; });
-  canvas.addEventListener("blur", () => { focused = false; keys.clear(); dirty = true; });
+  canvas.addEventListener("focus", () => { focused = true; dirty = true; if (state === "play") soundtrack.resume(); });
+  canvas.addEventListener("blur", () => { focused = false; keys.clear(); dirty = true; if (state === "play") soundtrack.pause(); });
   canvas.addEventListener("pointerdown", (e) => {
     canvas.focus();
     if (state !== "play") { start(); dirty = true; }
@@ -480,7 +656,8 @@ export function bughunt(root, { setMeta, log }) {
   canvas.focus();
   return {
     stop() {
-      cancelAnimationFrame(raf); ro.disconnect();
+      cancelAnimationFrame(raf); raf = 0; ro.disconnect();
+      soundtrack.release(0.8); sfx.close();
       removeEventListener("keydown", onKey); removeEventListener("keyup", onKeyUp);
       document.removeEventListener("mousemove", onMouse);
       if (document.pointerLockElement === canvas) document.exitPointerLock();

@@ -530,6 +530,9 @@ body:not([data-mode="desktop"]) #layout-tile { visibility: hidden; }
 .game canvas:focus-visible { border-color: var(--lime); }
 .game__hud { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); }
 .game__hud b { color: var(--lime); font-weight: 400; }
+.game__hud .warn, .game__hud .warn b { color: var(--red); }
+@media (prefers-reduced-motion: no-preference) { .game__hud .warn b { animation: hud-warn 0.9s ease-in-out infinite alternate; } }
+@keyframes hud-warn { from { opacity: 1; } to { opacity: 0.45; } }
 .typer__text { font-size: 15px; line-height: 1.7; color: var(--dim); }
 .typer__text .ok { color: var(--text); }
 .typer__text .bad { color: var(--lime-ink); background: var(--red); }
