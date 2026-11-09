@@ -36,21 +36,23 @@
 
   <!-- menubar -->
   <header class="menubar">
-    <span class="menubar__logo">◆ hzOS</span>
-    <nav class="menubar__apps" id="dock" aria-label="Apps"></nav>
-    <div class="menubar__modes" role="radiogroup" aria-label="Mode">
-      <button type="button" role="radio" data-mode="desktop" aria-checked="true">desktop</button>
-      <button type="button" role="radio" data-mode="focus" aria-checked="false">focus</button>
-      <button type="button" role="radio" data-mode="zen" aria-checked="false">zen</button>
+    <nav class="menubar__menus" id="menus" aria-label="Menu bar">
+      <div class="menu" data-menu="sys"><button type="button" class="menu__trigger menu__trigger--logo" aria-haspopup="menu" aria-expanded="false">◆ hzOS</button><div class="menu__panel" role="menu" aria-label="hzOS"></div></div>
+      <div class="menu" data-menu="apps"><button type="button" class="menu__trigger" aria-haspopup="menu" aria-expanded="false">apps</button><div class="menu__panel" role="menu" aria-label="Apps"></div></div>
+      <div class="menu" data-menu="view"><button type="button" class="menu__trigger" aria-haspopup="menu" aria-expanded="false">view</button><div class="menu__panel" role="menu" aria-label="View"></div></div>
+    </nav>
+    <nav class="menubar__apps" id="dock" aria-label="Open windows"></nav>
+    <div class="modes" role="radiogroup" aria-label="View mode">
+      <button type="button" role="radio" data-mode="desktop" aria-checked="true" title="desktop (alt+1)"><span aria-hidden="true">▦</span>desktop</button>
+      <button type="button" role="radio" data-mode="focus" aria-checked="false" title="focus (alt+2)"><span aria-hidden="true">◎</span>focus</button>
+      <button type="button" role="radio" data-mode="zen" aria-checked="false" title="zen (alt+3)"><span aria-hidden="true">◌</span>zen</button>
     </div>
-    <button type="button" class="menubar__reset menubar__tile" id="layout-tile" title="tile windows (alt+t)" aria-label="Tile windows" aria-pressed="false">▦</button>
-    <button type="button" class="menubar__reset" id="layout-reset" title="reset layout" aria-label="Reset layout">↺</button>
     <div class="menubar__status">
-      <span id="st-timer" hidden></span>
-      <span id="st-net" class="hide-sm">net:on</span>
-      <span id="st-wx" class="hide-sm">wx:--</span>
-      <span id="st-date" class="hide-sm">--</span>
-      <time id="st-time">--:--:--</time>
+      <span id="st-timer" class="chip chip--amber" hidden></span>
+      <button type="button" class="chip chip--btn" id="layout-tile" title="toggle tiling (alt+t)" aria-pressed="false"><span aria-hidden="true" class="chip__glyph">◱</span><span class="chip__label">float</span></button>
+      <span id="st-wx" class="chip hide-sm">wx:--</span>
+      <span id="st-net" class="chip chip--net hide-sm" title="online"><span class="sr-only">online</span></span>
+      <span class="menubar__clock"><span id="st-date" class="hide-sm">--</span><time id="st-time">--:--:--</time></span>
     </div>
   </header>
 

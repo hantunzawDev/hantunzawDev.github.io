@@ -22,7 +22,7 @@
 
   --f-ui: "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --f-dot: "Doto", "Martian Mono", ui-monospace, monospace;
-  --menubar: 34px;
+  --menubar: 36px;
   --cmdbar: 46px;
   color-scheme: dark;
 }
@@ -84,32 +84,104 @@ html.handoff .boot::before {
 @keyframes crt-glow { 0%, 45% { opacity: 1; } 100% { opacity: 0; } }
 
 /* ---------- menubar ---------- */
+/* three zones: menus | open-window taskbar | status. one 4px rhythm, 1px rules between groups */
 .menubar {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   position: fixed; inset: 0 0 auto; height: var(--menubar); z-index: 40;
-  display: flex; align-items: center; gap: 18px; padding: 0 14px;
+  display: flex; align-items: center; gap: 12px; padding: 0 8px 0 6px;
   background: var(--bar); border-bottom: 1px solid var(--line); white-space: nowrap;
 }
-.menubar__logo { color: var(--lime); font-weight: 700; text-shadow: var(--glow); }
-.menubar__apps { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
-.menubar__apps button {
-  border: 0; background: transparent; color: var(--dim); padding: 3px 8px; cursor: pointer;
-  transition: color .12s ease-out, background-color .12s ease-out;
+.menubar::after { /* bottom rule: a quiet phosphor highlight under the menus, fading into the line colour */
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; pointer-events: none;
+  background: linear-gradient(90deg, var(--line) 0, color-mix(in srgb, var(--lime) 38%, var(--line)) 14%, var(--line) 46%, var(--line) 100%);
 }
-.menubar__apps button[aria-pressed="true"] { color: var(--text); }
-@media (hover: hover) { .menubar__apps button:hover { background: var(--lime); color: var(--lime-ink); } }
-.menubar__modes { display: flex; border: 1px solid var(--line-hi); }
-.menubar__modes button { border: 0; background: none; color: var(--dim); padding: 2px 8px; cursor: pointer; }
-.menubar__modes button[aria-checked="true"] { background: var(--lime); color: var(--lime-ink); }
-@media (hover: hover) { .menubar__modes button:not([aria-checked="true"]):hover { color: var(--lime); } }
-#st-timer { color: var(--amber); }
-.menubar__reset { border: 0; background: none; color: var(--dim); padding: 2px 6px; line-height: 1; font-size: 15px; cursor: pointer; transition: color .12s ease-out, background-color .12s ease-out; }
-@media (hover: hover) { .menubar__reset:hover { background: var(--lime); color: var(--lime-ink); } }
-body:not([data-mode="desktop"]) .menubar__reset { visibility: hidden; }
-.menubar__tile[aria-pressed="true"] { color: var(--lime); text-shadow: var(--glow); }
-.desktop.is-flowing .win:not(.is-dragging) { transition: left .32s cubic-bezier(.2,.8,.2,1), top .32s cubic-bezier(.2,.8,.2,1), width .32s cubic-bezier(.2,.8,.2,1), height .32s cubic-bezier(.2,.8,.2,1); }
-.menubar__status { margin-left: auto; display: flex; gap: 16px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.menubar__menus { display: flex; align-items: center; height: 100%; flex: none; }
+.menu { position: relative; height: 100%; display: flex; align-items: center; }
+.menu__trigger {
+  height: 24px; padding: 0 10px; border: 0; background: none; color: var(--muted); cursor: pointer;
+  transition: color .12s ease, background-color .12s ease;
+}
+.menu__trigger--logo { color: var(--lime); font-weight: 700; text-shadow: var(--glow); padding: 0 12px 0 8px; }
+.menu.is-open .menu__trigger { background: var(--lime); color: var(--lime-ink); text-shadow: none; }
+@media (hover: hover) and (pointer: fine) { .menu:not(.is-open) .menu__trigger:hover { color: var(--text); background: color-mix(in srgb, var(--lime) 10%, transparent); } }
+.menu__panel {
+  position: absolute; top: calc(100% + 1px); left: 0; z-index: 70; min-width: 230px; padding: 4px;
+  background: var(--win); border: 1px solid var(--line-hi); box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.55);
+  display: grid; transform-origin: top left;
+  opacity: 0; transform: scale(0.97) translateY(-2px); visibility: hidden; pointer-events: none;
+  transition: opacity .1s ease-out, transform .1s ease-out, visibility 0s .1s;
+}
+.menu.is-open .menu__panel {
+  opacity: 1; transform: none; visibility: visible; pointer-events: auto;
+  transition: opacity .16s var(--ease-out), transform .16s var(--ease-out), visibility 0s;
+}
+.menu.is-instant .menu__panel, .menu:not(.is-open) .menu__panel { transition: none; }
+.menu__head { padding: 6px 10px 2px 30px; color: var(--dim); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+.menu__sep { height: 1px; margin: 4px 6px; background: var(--line); }
+.menu__item {
+  display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 4px 6px;
+  padding: 5px 10px 5px 8px; border: 0; background: none; color: var(--text); text-align: left; cursor: pointer;
+}
+.menu__item:focus-visible { outline: none; background: var(--lime); color: var(--lime-ink); }
+@media (hover: hover) and (pointer: fine) { .menu__item:not(:disabled):hover { background: var(--lime); color: var(--lime-ink); } }
+.menu__item:disabled { color: var(--dim); cursor: default; }
+.menu__check { color: var(--lime); text-align: center; font-size: 11px; }
+.menu__item:is(:hover, :focus-visible):not(:disabled) .menu__check, .menu__item:is(:hover, :focus-visible):not(:disabled) .menu__kbd { color: inherit; }
+.menu__kbd { font-family: inherit; font-size: 10px; color: var(--dim); padding-left: 16px; }
+
+/* taskbar: open windows only, separated from the menus by a rule */
+.menubar__apps {
+  display: flex; align-items: center; gap: 2px; min-width: 0; flex: 1; height: 100%;
+  overflow-x: auto; scrollbar-width: none; padding-left: 12px; border-left: 1px solid var(--line);
+}
+.task {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px;
+  border: 0; background: none; color: var(--dim); cursor: pointer; flex: none;
+  transition: color .12s ease, background-color .12s ease;
+}
+.task::after { /* focus indicator under the active window's name */
+  content: ""; position: absolute; left: 10px; right: 10px; bottom: 1px; height: 2px; background: var(--lime);
+  box-shadow: var(--glow); transform: scaleX(0); transition: transform .16s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.task[aria-current] { color: var(--text); }
+.task[aria-current]::after { transform: scaleX(1); }
+@media (hover: hover) and (pointer: fine) { .task:not([aria-current]):hover { color: var(--text); background: color-mix(in srgb, var(--lime) 8%, transparent); } }
+.task__float { color: var(--amber); font-size: 10px; }
+
+/* mode switch: the most-used control, so it stays on the bar as a segmented radio.
+   instant highlight, no slide: it's switched many times a day, often from the keyboard */
+.modes { display: flex; flex: none; height: 24px; padding: 2px; gap: 2px; border: 1px solid var(--line-hi); }
+.modes button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border: 0; background: none;
+  color: var(--muted); cursor: pointer; transition: color .12s ease, background-color .12s ease;
+}
+.modes button span { font-size: 11px; color: var(--dim); }
+.modes button[aria-checked="true"] { background: var(--lime); color: var(--lime-ink); font-weight: 500; }
+.modes button[aria-checked="true"] span { color: inherit; }
+.modes button:active { transform: translate(1px, 1px); }
+@media (hover: hover) and (pointer: fine) { .modes button:not([aria-checked="true"]):hover { color: var(--text); background: color-mix(in srgb, var(--lime) 10%, transparent); } }
+body:not([data-mode="desktop"]) .modes { border-color: var(--lime); box-shadow: var(--glow); }
+
+/* status: compact chips, clock last */
+.menubar__status { display: flex; align-items: center; gap: 4px; flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid transparent; }
+.chip[hidden] { display: none; }
+.chip--amber { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 35%, transparent); }
+.chip--btn {
+  background: none; color: var(--muted); cursor: pointer; border-color: var(--line);
+  transition: color .12s ease, border-color .12s ease;
+}
+.chip--btn[aria-pressed="true"] { color: var(--lime); border-color: var(--line-hi); }
+.chip--btn:active { transform: translate(1px, 1px); }
+@media (hover: hover) and (pointer: fine) { .chip--btn:hover { color: var(--lime); border-color: var(--lime); } }
+.chip__glyph { font-size: 12px; line-height: 1; }
+.chip--net { padding: 0 6px; }
+.chip--net::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--lime); box-shadow: var(--glow); }
+.chip--net.off::before { background: var(--red); box-shadow: none; }
+.menubar__clock { display: inline-flex; gap: 10px; padding: 0 4px 0 10px; margin-left: 4px; border-left: 1px solid var(--line); }
 #st-time { color: var(--text); }
-#st-net.off { color: var(--red); }
+body:not([data-mode="desktop"]) #layout-tile { visibility: hidden; }
+.desktop.is-flowing .win:not(.is-dragging) { transition: left .32s cubic-bezier(.2,.8,.2,1), top .32s cubic-bezier(.2,.8,.2,1), width .32s cubic-bezier(.2,.8,.2,1), height .32s cubic-bezier(.2,.8,.2,1); }
 
 /* ---------- desktop + windows ---------- */
 .desktop { position: fixed; inset: var(--menubar) 0 var(--cmdbar) 0; }
@@ -136,7 +208,16 @@ body:not([data-mode="desktop"]) .menubar__reset { visibility: hidden; }
   width: 20px; height: 20px; border: 1px solid currentColor; background: transparent; color: inherit;
   line-height: 1; cursor: pointer; display: grid; place-items: center; font-size: 11px;
 }
-@media (hover: hover) { .win__ctrl button:hover { background: var(--red); border-color: var(--red); color: var(--lime-ink); } }
+.win__ctrl { display: flex; gap: 4px; }
+.win__ctrl button:active { transform: translate(1px, 1px); }
+@media (hover: hover) { .win__ctrl button[data-close]:hover { background: var(--red); border-color: var(--red); color: var(--lime-ink); } }
+/* float pin: only meaningful while tiling */
+.win__ctrl .win__float { display: none; font-size: 12px; }
+.desktop.is-tiled .win__ctrl .win__float { display: grid; }
+.win__float[aria-pressed="true"] { border-style: dashed; }
+@media (hover: hover) { .win__ctrl .win__float:hover { color: var(--lime); background: var(--lime-ink); border-color: var(--lime-ink); } }
+/* floating windows over the tile grid: lifted, dashed frame so the layer reads at a glance */
+.desktop.is-tiled .win.is-float { box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.6); outline: 1px dashed color-mix(in srgb, var(--lime) 35%, transparent); outline-offset: 3px; }
 .win__body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; scrollbar-width: thin; scrollbar-color: var(--line-hi) transparent; }
 .win__grip {
   position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; touch-action: none;
@@ -352,8 +433,11 @@ body:not([data-mode="desktop"]) .menubar__apps { visibility: hidden; }
   .win[data-app="feed"], .win[data-app="cal"] { max-height: 520px; }
   .win[data-app="game"] .game__board { height: min(86vw, 420px); flex: none; }
   .win[data-app="viz"] .viz__board { height: min(70vw, 360px); flex: none; }
-  .menubar__apps { display: none; }
-  .menubar__reset { display: none; }
+  .menubar__apps { visibility: hidden; }
+  #layout-tile, .desktop.is-tiled .win__ctrl .win__float { display: none; }
+  .menubar__apps { flex: 1; }
+  .modes button { padding: 0 8px; font-size: 0; gap: 0; }
+  .modes button span { font-size: 13px; }
   .snap-ghost { display: none; }
   .win__grip { display: none; }
   .focus--stage .focus__len { margin-left: 0; }

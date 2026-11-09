@@ -106,8 +106,18 @@ const tileOrder = (() => {
   return [...new Set([...saved, ...APPS.filter(tileable)])];
 })();
 const tiling = () => settings.tile && !small();
-const tiledApps = () => tileOrder.filter((a) => !win(a).hidden);
-const isTiled = (a) => tiling() && tileable(a) && !win(a).hidden;
+// per-window float pin (i3 "floating toggle"): pinned windows leave the grid and float above it
+const FLOAT_DEFAULT = ["config"];
+const floats = new Set(store.get("float.v1", FLOAT_DEFAULT).filter((a) => APPS.includes(a)));
+const isPinned = (a) => floats.has(a);
+const tiledApps = () => tileOrder.filter((a) => !win(a).hidden && !isPinned(a));
+const isTiled = (a) => tiling() && tileable(a) && !isPinned(a) && !win(a).hidden;
+// floats stack above tiles; both layers keep their own click-to-front order
+const FLOAT_LAYER = 5000;
+const zFor = (a) => {
+  if (zTop > FLOAT_LAYER - 500) { zTop = 10; restack(); } // keep tiles from climbing into the float layer
+  return ++zTop + (tiling() && isPinned(a) ? FLOAT_LAYER : 0);
+};
 // unit-square cells: master gets mfact of the long axis, the stack splits into columns
 // whose count keeps each cell close to 1.4:1 so eight windows still read
 function tileCells(apps, W, H) {
@@ -150,8 +160,32 @@ function relayout(animate = false) {
   for (const a of APPS) {
     const el = win(a);
     el.classList.toggle("is-tiled", !!cells[a]);
+    el.classList.toggle("is-float", tiling() && isPinned(a));
     applyRect(el, cells[a] ? gapped(cells[a], area) : layout[a]);
+    syncFloatButton(a);
   }
+}
+function syncFloatButton(a) {
+  const b = $("[data-float]", win(a));
+  if (!b) return;
+  const pinned = isPinned(a);
+  b.setAttribute("aria-pressed", String(pinned));
+  b.textContent = pinned ? "◱" : "▦";
+  b.title = pinned ? "floating · click to tile (alt+shift+space)" : "tiled · click to float (alt+shift+space)";
+  b.setAttribute("aria-label", `${pinned ? "Tile" : "Float"} ${FILES[a]}`);
+}
+// alt+shift+space: pin the window as floating, or send it back into the grid
+function toggleFloat(app = $(".win.is-front")?.dataset.app, force) {
+  app = appName(app || "");
+  if (!APPS.includes(app) || small()) return false;
+  const on = force ?? !isPinned(app);
+  if (on) floats.add(app); else floats.delete(app);
+  store.set("float.v1", [...floats]);
+  win(app).classList.remove("is-max");
+  relayout(true);
+  front(app);
+  renderDock();
+  return on;
 }
 function swapTiles(a, b) {
   const i = tileOrder.indexOf(a), j = tileOrder.indexOf(b);
@@ -163,11 +197,25 @@ function swapTiles(a, b) {
 function setTile(on, { say = true } = {}) {
   settings.tile = !!on;
   saveSettings();
-  desktop.classList.toggle("is-tiled", settings.tile);
-  $("#layout-tile").setAttribute("aria-pressed", String(settings.tile));
-  if (settings.tile) $$(".win.is-max").forEach((w) => tileable(w.dataset.app) && w.classList.remove("is-max"));
+  syncLayoutChip();
+  if (settings.tile) $$(".win.is-max").forEach((w) => isTiled(w.dataset.app) && w.classList.remove("is-max"));
   relayout(true);
-  if (say) log(`tile: ${settings.tile ? "on · alt+j/k focus · alt+enter master · alt+h/l split" : "off"}`, "ok");
+  restack();
+  renderDock();
+  if (say) log(`tile: ${settings.tile ? "on · alt+shift+space float · alt+j/k focus · alt+enter master · alt+h/l split" : "off"}`, "ok");
+}
+function syncLayoutChip() {
+  desktop.classList.toggle("is-tiled", !!settings.tile);
+  const b = $("#layout-tile");
+  b.setAttribute("aria-pressed", String(!!settings.tile));
+  $(".chip__glyph", b).textContent = settings.tile ? "▦" : "◱";
+  $(".chip__label", b).textContent = settings.tile ? "tile" : "float";
+}
+// re-apply z-order after the layer rules change (floats above tiles only while tiling)
+function restack() {
+  APPS.map((a) => win(a)).filter((el) => !el.hidden)
+    .sort((x, y) => (+x.style.zIndex || 0) % FLOAT_LAYER - (+y.style.zIndex || 0) % FLOAT_LAYER)
+    .forEach((el) => { el.style.zIndex = zFor(el.dataset.app); });
 }
 function nudgeSplit(d) {
   if (!tiling()) return false;
@@ -241,8 +289,8 @@ function startDrag(e, el, handle) {
       if (Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 4) return;
       moved = true;
       el.classList.add("is-dragging");
-      ghost.style.zIndex = ++zTop;
-      el.style.zIndex = ++zTop;
+      ghost.style.zIndex = FLOAT_LAYER * 2;
+      el.style.zIndex = FLOAT_LAYER * 2 + 1;
       if (prev && !tiled) { // unsnap: back to the old size, cursor keeps its spot across the title bar
         const pw = prev[2] * area.width;
         off.x = pw * (off.x / w); w = pw;
@@ -278,7 +326,8 @@ function startDrag(e, el, handle) {
     el.classList.remove("is-dragging");
     ghost.classList.remove("is-on");
     if (!moved) return;
-    if (cancel) { el.style.cssText = orig; el.style.zIndex = ++zTop; return; }
+    el.style.zIndex = zFor(app);
+    if (cancel) { el.style.cssText = orig; el.style.zIndex = zFor(app); return; }
     if (tiled) { flow(); target ? swapTiles(app, target) : relayout(true); return; }
     if (target) {
       snapPrev[app] = prev || toFrac(start, area);
@@ -301,7 +350,8 @@ function front(app) {
   $$(".win.is-front").forEach((w) => w.classList.remove("is-front"));
   const el = win(app);
   el.classList.add("is-front");
-  el.style.zIndex = ++zTop;
+  el.style.zIndex = zFor(app);
+  syncDock();
 }
 function openApp(app, { focus = true } = {}) {
   app = appName(app);
@@ -350,14 +400,114 @@ function toggleMax(app) {
   front(app);
   return true;
 }
+// taskbar: only windows that are open. click focuses, middle-click closes
 function renderDock() {
-  $("#dock").replaceChildren(...APPS.filter((a) => a !== "game").map((app) => {
-    const b = h("button", { type: "button", textContent: app });
-    b.setAttribute("aria-pressed", String(!win(app).hidden));
-    b.addEventListener("click", () => (win(app).hidden || !win(app).classList.contains("is-front") ? openApp(app) : closeApp(app)));
+  const open = APPS.filter((a) => !win(a).hidden);
+  $("#dock").replaceChildren(...open.map((app) => {
+    const b = h("button", { type: "button", className: "task", title: `${FILES[app]} · middle-click to close` });
+    b.dataset.app = app;
+    b.append(h("span", { className: "task__name", textContent: app === "game" ? ($("#game-title").textContent || "game").replace(/\.exe$/, "") : app }));
+    if (tiling() && isPinned(app)) b.append(h("span", { className: "task__float", textContent: "◱", title: "floating" }));
+    b.addEventListener("click", () => { openApp(app); win(app).focus({ preventScroll: true }); });
+    b.addEventListener("auxclick", (e) => { if (e.button === 1) { e.preventDefault(); closeApp(app); } });
     return b;
   }));
+  syncDock();
 }
+function syncDock() {
+  const cur = $(".win.is-front")?.dataset.app;
+  $$("#dock .task").forEach((b) => b.toggleAttribute("aria-current", b.dataset.app === cur));
+}
+
+/* ---------- menubar menus: ◆ hzOS · apps · view ---------- */
+const APP_GROUPS = [
+  ["desk", ["clock", "wx", "map", "fortune"]],
+  ["work", ["todo", "notes", "focus", "feed"]],
+  ["media", ["viz"]],
+];
+const kbd = (t) => h("kbd", { className: "menu__kbd", textContent: t });
+function menuItem(label, run, { role = "menuitem", checked, disabled, hint } = {}) {
+  const b = h("button", { type: "button", className: "menu__item", disabled: !!disabled });
+  b.setAttribute("role", role);
+  if (checked != null) b.setAttribute("aria-checked", String(!!checked));
+  b.append(h("span", { className: "menu__check", textContent: checked ? (role === "menuitemradio" ? "●" : "✓") : "" }), h("span", { className: "menu__label", textContent: label }));
+  if (hint) b.append(kbd(hint));
+  b.addEventListener("click", () => { closeMenus(); run(); });
+  return b;
+}
+const menuSep = () => { const s = h("div", { className: "menu__sep" }); s.setAttribute("role", "separator"); return s; };
+const menuHead = (t) => h("div", { className: "menu__head", textContent: t });
+const MENUS = {
+  sys: () => [
+    menuItem("about hzOS", () => COMMANDS.neofetch()),
+    menuItem("settings…", () => openApp("config")),
+    menuItem("command line", () => input.focus(), { hint: "/" }),
+    menuItem("help", () => COMMANDS.help()),
+  ],
+  apps: () => [
+    ...APP_GROUPS.flatMap(([g, apps], i) => [
+      ...(i ? [menuSep()] : []), menuHead(g),
+      ...apps.map((a) => menuItem(FILES[a], () => (win(a).hidden ? openApp(a) : closeApp(a)), { role: "menuitemcheckbox", checked: !win(a).hidden })),
+    ]),
+    menuSep(), menuHead("games"),
+    ...Object.entries(GAMES).map(([k, [, t]]) => menuItem(t, () => COMMANDS[k]())),
+  ],
+  view: () => {
+    const cur = $(".win.is-front:not([hidden])")?.dataset.app;
+    const wide = !small();
+    return [
+      menuHead("mode"),
+      ...MODES.map((m, i) => menuItem(m, () => setMode(m), { role: "menuitemradio", checked: document.body.dataset.mode === m, hint: `⌥${i + 1}` })),
+      menuSep(), menuHead("windows"),
+      menuItem("tile windows", () => setTile(!settings.tile), { role: "menuitemcheckbox", checked: settings.tile, disabled: !wide, hint: "⌥T" }),
+      menuItem(cur ? `float ${FILES[cur]}` : "float window", () => toggleFloat(cur), { role: "menuitemcheckbox", checked: cur && isPinned(cur), disabled: !cur || !tiling(), hint: "⌥⇧␣" }),
+      menuItem("snap to edges", () => { settings.snap = !settings.snap; saveSettings(); }, { role: "menuitemcheckbox", checked: settings.snap, disabled: !wide }),
+      menuSep(),
+      menuItem("reset layout", () => { resetLayout(); log("layout: reset.", "ok"); }, { disabled: !wide }),
+    ];
+  },
+};
+let openMenu = null;
+function closeMenus({ refocus = false } = {}) {
+  if (!openMenu) return;
+  const m = openMenu;
+  openMenu = null;
+  m.classList.remove("is-open");
+  const t = $(".menu__trigger", m);
+  t.setAttribute("aria-expanded", "false");
+  if (refocus) t.focus();
+}
+function showMenu(m, { focusFirst = false } = {}) {
+  if (openMenu === m) return;
+  // keyboard opens and menu-to-menu scrubbing swap instantly; only a fresh pointer open eases in
+  const instant = focusFirst || !!openMenu;
+  closeMenus();
+  $(".menu__panel", m).replaceChildren(...MENUS[m.dataset.menu]());
+  m.classList.toggle("is-instant", instant);
+  m.classList.add("is-open");
+  $(".menu__trigger", m).setAttribute("aria-expanded", "true");
+  openMenu = m;
+  if (focusFirst) $(".menu__item:not(:disabled)", m)?.focus();
+}
+$$("#menus .menu").forEach((m) => {
+  const t = $(".menu__trigger", m);
+  t.addEventListener("click", (e) => (openMenu === m ? closeMenus() : showMenu(m, { focusFirst: e.detail === 0 })));
+  t.addEventListener("pointerenter", () => { if (openMenu && openMenu !== m) showMenu(m); }); // menubar scrubbing
+  t.addEventListener("keydown", (e) => { if (e.key === "ArrowDown") { e.preventDefault(); showMenu(m, { focusFirst: true }); } });
+  m.addEventListener("keydown", (e) => {
+    const items = $$(".menu__item:not(:disabled)", m);
+    const i = items.indexOf(document.activeElement);
+    const menus = $$("#menus .menu");
+    const step = (d) => { const n = menus[(menus.indexOf(m) + d + menus.length) % menus.length]; showMenu(n, { focusFirst: true }); };
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeMenus({ refocus: true }); }
+    else if (e.key === "ArrowDown" && i >= 0) { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    else if (e.key === "ArrowUp" && i >= 0) { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    else if (e.key === "ArrowRight" && openMenu) { e.preventDefault(); step(1); }
+    else if (e.key === "ArrowLeft" && openMenu) { e.preventDefault(); step(-1); }
+    else if (e.key === "Tab") closeMenus();
+  });
+});
+addEventListener("pointerdown", (e) => { if (openMenu && !openMenu.contains(e.target)) closeMenus(); }, true);
 
 function pointerTrack(handle, el, onMove, onEnd) {
   handle.addEventListener("pointerdown", (e) => {
@@ -383,6 +533,11 @@ function enableWindow(el) {
   grip.setAttribute("aria-hidden", "true");
   el.append(grip);
   el.tabIndex = -1; // alt+j/k can focus the window itself
+  const fb = h("button", { type: "button", className: "win__float" });
+  fb.dataset.float = "";
+  fb.addEventListener("click", () => toggleFloat(app));
+  $(".win__ctrl", el).prepend(fb);
+  syncFloatButton(app);
   const commit = (r, area) => {
     layout[app] = [(r.left - area.left) / area.width, (r.top - area.top) / area.height, r.width / area.width, r.height / area.height];
     saveLayout();
@@ -408,6 +563,7 @@ function resetLayout() {
   Object.assign(layout, ORIENT[orient].defaults);
   for (const k of Object.keys(snapPrev)) delete snapPrev[k];
   settings.mfact = 0.55; saveSettings();
+  floats.clear(); FLOAT_DEFAULT.forEach((a) => floats.add(a)); store.del("float.v1");
   APPS.forEach((a) => win(a).classList.remove("is-max"));
   APPS.filter((a) => !OPT_IN.includes(a)).forEach((a) => openApp(a, { focus: false }));
   // after reopening, since each reopened window would otherwise claim master
@@ -415,12 +571,18 @@ function resetLayout() {
   store.del("tile.order");
   relayout(true);
 }
-$("#layout-reset").addEventListener("click", () => { resetLayout(); log("layout: reset.", "ok"); });
 $("#layout-tile").addEventListener("click", () => setTile(!settings.tile));
 // tiling keys (alt / option, matched by physical key so macOS option-characters don't get in the way)
 addEventListener("keydown", (e) => {
   if (!e.altKey || e.ctrlKey || e.metaKey || small() || document.body.dataset.mode !== "desktop") return;
   if (document.activeElement?.tagName === "CANVAS") return;
+  if (e.code === "Space" && e.shiftKey) {
+    if (!tiling()) return;
+    e.preventDefault();
+    const a = $(".win.is-front")?.dataset.app;
+    if (a) log(`${FILES[a]}: ${toggleFloat(a) ? "floating" : "tiled"}`);
+    return;
+  }
   const act = {
     KeyT: () => setTile(!settings.tile),
     KeyJ: () => cycleFocus(1), KeyK: () => cycleFocus(-1),
@@ -442,7 +604,7 @@ function setMode(mode) {
   store.set("mode", mode);
   $("#stage-focus").hidden = mode !== "focus";
   $("#stage-zen").hidden = mode !== "zen";
-  $$(".menubar__modes button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === mode)));
+  $$(".modes [role=radio]").forEach((b) => { const on = b.dataset.mode === mode; b.setAttribute("aria-checked", String(on)); b.tabIndex = on ? 0 : -1; });
   if (mode === "focus") { renderStageTask(); $("#stage-focus [data-focus-start]").focus(); }
   if (mode === "zen") renderZen();
   if (mode !== "desktop" && !reduce && window.gsap && !document.hidden) {
@@ -450,8 +612,27 @@ function setMode(mode) {
   }
   return true;
 }
-$$(".menubar__modes button").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
 $$("[data-mode-go]").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.modeGo)));
+// always-visible mode switch: click, or arrow keys inside the radio group
+$$(".modes [role=radio]").forEach((b) => {
+  b.addEventListener("click", () => setMode(b.dataset.mode));
+  b.addEventListener("keydown", (e) => {
+    const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    const next = MODES[(MODES.indexOf(document.body.dataset.mode) + d + MODES.length) % MODES.length];
+    setMode(next);
+    $(`.modes [data-mode="${next}"]`).focus();
+  });
+});
+// alt+1/2/3 switch modes from anywhere, even while typing (alt+digit types nothing useful)
+addEventListener("keydown", (e) => {
+  if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  const m = { Digit1: "desktop", Digit2: "focus", Digit3: "zen" }[e.code];
+  if (!m) return;
+  e.preventDefault();
+  setMode(m);
+});
 
 let stageTask = 0;
 function renderStageTask() {
@@ -780,6 +961,7 @@ function startGame(name) {
   const [fn, title] = GAMES[name];
   openApp("game", { focus: false });
   $("#game-title").textContent = title;
+  renderDock();
   game = fn($("#game"), { setMeta: (m) => ($("#game-meta").textContent = m), log });
 }
 /* =========================================================
@@ -862,7 +1044,7 @@ const HELP = {
   fun:    "neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee",
   games:  "snake · type · guess · fps (bughunt)",
   audio:  "viz [mic|sys|off] · viz bars|sphere|tunnel",
-  system: "open|close|max <app> · ls · layout reset · tile [on|off] · snap on|off · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
+  system: "open|close|max <app> · ls · layout reset · tile [on|off] · float [app] [on|off] · snap on|off · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
 };
 const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : "#"; } catch { return "#"; } }; // feed/calendar URLs are third-party data
 const go = (url) => { location.href = safeUrl(url); };
@@ -1061,6 +1243,15 @@ const COMMANDS = {
     if (a === "master") return promote();
     log("usage: tile [on|off|master]", "err");
   },
+  float: (a = "") => {
+    if (small()) return log("float: needs a wider screen", "err");
+    let [app, sw] = a.split(/\s+/);
+    if (app === "on" || app === "off") [app, sw] = ["", app];
+    app = appName(app || $(".win.is-front")?.dataset.app || "");
+    if (!APPS.includes(app)) return log("usage: float [app] [on|off]", "err");
+    const on = toggleFloat(app, sw ? sw === "on" : undefined);
+    log(`${FILES[app]}: ${on ? "floating" : "tiles"}${tiling() ? "" : " (applies when tile is on)"}`, "ok");
+  },
   snap: (a) => {
     if (a !== "on" && a !== "off") return log(`snap: ${settings.snap ? "on" : "off"} · usage: snap on|off`);
     settings.snap = a === "on"; saveSettings(); log(`snap: ${a}`, "ok");
@@ -1167,7 +1358,7 @@ input.addEventListener("keydown", (e) => {
     const [c, ...r] = input.value.split(" ");
     let pool, prefix = "";
     if (r.length === 0) pool = [...Object.keys(COMMANDS), ...links().map((l) => l.name)];
-    else if (["open", "close", "max"].includes(c)) { pool = APPS; prefix = c + " "; }
+    else if (["open", "close", "max", "float"].includes(c)) { pool = APPS; prefix = c + " "; }
     else if (c === "theme") { pool = THEMES; prefix = c + " "; }
     else if (c === "mode") { pool = MODES; prefix = c + " "; }
     else if (c === "tile" || c === "snap") { pool = c === "tile" ? ["on", "off", "master"] : ["on", "off"]; prefix = c + " "; }
@@ -1195,7 +1386,7 @@ addEventListener("keydown", (e) => {
 /* =========================================================
    status + refresh
    ========================================================= */
-function net() { const on = navigator.onLine; $("#st-net").textContent = on ? "net:on" : "net:off"; $("#st-net").classList.toggle("off", !on); }
+function net() { const on = navigator.onLine, el = $("#st-net"); el.title = on ? "online" : "offline"; el.firstElementChild.textContent = el.title; el.classList.toggle("off", !on); }
 addEventListener("online", net); addEventListener("offline", net);
 async function refreshAll() {
   log("refreshing wx and feed…");
@@ -1254,8 +1445,7 @@ async function start() {
   const savedTheme = store.get("settings", {}).theme;
   applyTheme((!savedTheme && handoff?.theme && THEMES.includes(handoff.theme)) ? handoff.theme : settings.theme || "lime");
   APPS.forEach((app) => { enableWindow(win(app)); win(app).hidden = closed.has(app); });
-  desktop.classList.toggle("is-tiled", !!settings.tile);
-  $("#layout-tile").setAttribute("aria-pressed", String(!!settings.tile));
+  syncLayoutChip();
   relayout();
   if (!win("viz").hidden) mountViz();
   if (!win("game").hidden) closeApp("game"); // games don't resume across reloads
