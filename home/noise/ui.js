@@ -8,7 +8,7 @@
 //
 // `state` is the sanitized persisted object (store key `noise`); the module
 // listeners below keep it in step with the engine whether or not the window is
-// open, so commands and the mini player (Task 8) see the same state.
+// open, so commands and the mini player see the same state.
 import { store } from "../data.js";
 import { audio, bands, waveF } from "../audio.js";
 import { engine } from "./engine.js";
@@ -19,6 +19,7 @@ import { LAYERS } from "./catalog.js";
 import { GENRES, genPattern } from "./patterns.js";
 import { STATIONS, VIBES, stationById } from "./stations.js";
 import { PRESETS, sanitizeState } from "./presets.js";
+import { parseNoise, parseRadio, parseSleep } from "./cmd.js";
 
 const KNOWN = { genres: GENRES.map((g) => g.id), layers: LAYERS.map((l) => l.id), stations: STATIONS.map((s) => s.id) };
 const GROUPS = ["color", "nature", "places", "brainwave"];
@@ -88,6 +89,8 @@ function loadUser() {
 // restore the layer selection into the (idle) engine at load: selection only, no sound
 for (const [id, v] of Object.entries(state.layers)) layers.set(id, v);
 engine.setVol(state.vol);
+// any layer change (window, command, preset) lands in the persisted state, window open or not
+layers.onChange(() => { state.layers = layers.active(); persist(); renderSoon(); });
 
 // ---------------------------------------------------------------- module sync (window open or not)
 
@@ -649,9 +652,9 @@ function buildRadio(R, p) {
 
 let renderQueued = false;
 function renderSoon() {
-  if (!ui || renderQueued) return;
+  if ((!ui && !mini) || renderQueued) return;
   renderQueued = true;
-  queueMicrotask(() => { renderQueued = false; if (ui) render(); });
+  queueMicrotask(() => { renderQueued = false; if (ui) render(); if (mini) renderMini(); });
 }
 
 function statusInfo() {
@@ -833,7 +836,7 @@ function renderChips() {
     const b = h("button", { type: "button", class: "nz-chip" + (p.user ? " is-user" : ""), "data-preset": p.id, "aria-pressed": String(activePreset === p.id), text: (p.user ? "★ " : "") + p.name, title: presetTitle(p), onclick: () => applyPreset(p.id) });
     return b;
   }), R.saveBtn);
-  if (focusedId) R.chips.querySelector(`[data-preset="${focusedId}"]`)?.focus();
+  if (focusedId) R.chips.querySelector(`[data-preset="${CSS.escape(focusedId)}"]`)?.focus();
 }
 function presetTitle(p) {
   const parts = [];
@@ -903,7 +906,7 @@ function readColors() {
 const peaks = new Float32Array(32);
 function drawRing(playing) {
   const cv = ui.ring, dpr = Math.min(2, devicePixelRatio || 1), S = 96;
-  if (cv.width !== S * dpr) { cv.width = cv.height = S * dpr; }
+  if (cv.width !== Math.round(S * dpr)) { cv.width = cv.height = Math.round(S * dpr); }
   const c = cv.getContext("2d");
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.clearRect(0, 0, S, S);
@@ -1008,20 +1011,25 @@ function drawScope(playing) {
 
 // ---------------------------------------------------------------- the one loop
 
-let raf = 0, lastPaint = 0, lastPoll = 0, layersKey = "";
+// One rAF drives both the window (desktop) and the mini player (focus/zen). The two
+// are never on screen together, and the loop stops as soon as neither is.
+let raf = 0, lastPaint = 0, lastPoll = 0;
 function visible() {
   return !!ui && !document.hidden && document.body.dataset.mode === "desktop" && !ui.win.hidden && ui.inView;
 }
-function wake() { if (!raf && visible()) raf = requestAnimationFrame(frame); }
+function wake() { if (!raf && (visible() || miniVisible())) raf = requestAnimationFrame(frame); }
 
 function frame(now) {
   raf = 0;
-  if (!visible()) return;
+  const win = visible(), mv = miniVisible();
+  if (!win && !mv) return;
   raf = requestAnimationFrame(frame);
   if (RM.matches && now - lastPaint < 100) return; // reduced motion: 10 fps, plain bars
   lastPaint = now;
   audio.read(now / 1000);
   const playing = engine.state === "playing" || engine.state === "fading";
+  if (mv) drawMini(now, playing);
+  if (!win) return;
   drawRing(playing);
 
   // playhead follows the transport-derived step
@@ -1049,13 +1057,367 @@ function frame(now) {
     });
   } else if (state.tab === "radio") drawScope(playing && pick === "radio");
 
-  if (now - lastPoll > 300) { // commands and presets can change layers from outside
+  if (now - lastPoll > 300) { // the sleep countdown has no event of its own
     lastPoll = now;
-    const k = JSON.stringify(layers.active());
-    if (k !== layersKey) { layersKey = k; state.layers = layers.active(); persist(); render(); }
     sleepText();
     if (ui.meta && engine.sleepLeft()) render();
   }
+}
+
+// ---------------------------------------------------------------- mini player (focus + zen)
+
+// A glass pill at the bottom of the focus/zen stage: transport, what's on, a 24-bar
+// spectrum, volume and a way back to the full window. It shows only while there is a
+// selection, draws on the shared rAF, and in zen it dims to 0.2 after 4 s of no input.
+const MB = 24;
+const mVals = new Float32Array(MB), mPeaks = new Float32Array(MB);
+let mini = null, mColors = null;
+
+function rgba(hex, a) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+}
+function readMiniColors() {
+  const cs = getComputedStyle(document.body);
+  const v = (n) => cs.getPropertyValue(n).trim();
+  mColors = { accent: v("--lime"), hot: v("--amber"), line: v("--line"), lineHi: v("--line-hi"), glow: v("--glow") !== "none" };
+}
+
+function buildMini() {
+  const M = {};
+  M.glyph = h("span", { class: "nz-mini__glyph", "aria-hidden": "true" });
+  M.play = h("button", { type: "button", class: "nz-mini__play", "aria-label": "Play", onclick: () => { toggle(); poke(); } }, M.glyph);
+  M.tag = h("span", { class: "nz-mini__tag" });
+  M.name = h("span", { class: "nz-mini__name" });
+  M.desc = h("span", { class: "nz-mini__desc" });
+  M.sleep = h("span", { class: "nz-mini__sleep", title: "sleep timer" });
+  M.cv = h("canvas", { class: "nz-mini__spec", width: "120", height: "28", "aria-hidden": "true" });
+  M.vol = h("input", { type: "range", class: "nz-mini__range", min: "0", max: "100", step: "1", "aria-label": "Volume" });
+  M.volNum = h("span", { class: "nz-mini__num", "aria-hidden": "true" });
+  M.vol.addEventListener("input", () => {
+    const v = clamp(+M.vol.value / 100, 0, 1);
+    M.vol.style.setProperty("--v", v.toFixed(3));
+    M.volNum.textContent = pct(v);
+    engine.setVol(v);
+  });
+  M.more = h("button", { type: "button", class: "nz-mini__more", "aria-label": "Open noise.app", title: "open noise.app", text: "⋯", onclick: () => M.onExpand?.() });
+  M.root = h("div", { class: "nz-mini", role: "region", "aria-label": "noise.app player" },
+    M.play,
+    h("div", { class: "nz-mini__info" },
+      h("div", { class: "nz-mini__top" }, h("i", { class: "nz-mini__led", "aria-hidden": "true" }), M.tag, M.name),
+      h("div", { class: "nz-mini__bot", role: "status", "aria-live": "polite" }, M.desc, M.sleep)),
+    M.cv,
+    h("div", { class: "nz-mini__vol" }, M.vol, M.volNum),
+    M.more);
+  M.shown = false;
+  M.lastSleep = -1;
+  return M;
+}
+
+function miniInfo() {
+  const act = layers.active(), ids = Object.keys(act);
+  const p = activePreset ? [...PRESETS, ...userPresets].find((x) => x.id === activePreset) : null;
+  const names = ids.map((id) => layerOf(id)?.name ?? id);
+  const plus = names.length ? ` + ${names.length > 2 ? `${names.length} layers` : names.join(" + ")}` : "";
+  if (pick === "radio" && state.station) {
+    const st = stationById(state.station), np = nowPlaying(st);
+    return { tag: "fm", name: p ? p.name : st.name, desc: np ? `♪ ${np}` : `${st.vibe} radio${plus}` };
+  }
+  if (pick === "music") {
+    const g = genreOf(state.genre);
+    return { tag: "gen", name: p ? p.name : g.name, desc: `${p ? g.name + " · " : ""}${Math.round(state.knobs.bpm)} bpm${plus}` };
+  }
+  return { tag: "mix", name: p ? p.name : names.length > 2 ? `${names.length} layers` : names.join(" + "), desc: layerSummary(act) };
+}
+
+function renderMini() {
+  const M = mini, show = hasSelection();
+  if (show !== M.shown) {
+    M.shown = show;
+    M.root.classList.toggle("is-on", show);
+    M.root.inert = !show;
+    if (show) poke();
+  }
+  M.root.dataset.state = engine.state;
+  M.root.dataset.src = pick;
+  const busy = isBusy();
+  M.play.dataset.k = busy ? "stop" : "play";
+  M.play.setAttribute("aria-label", busy ? "Stop" : "Play");
+  const info = miniInfo(), si = statusInfo();
+  M.tag.textContent = info.tag;
+  M.name.textContent = info.name || "noise";
+  M.root.dataset.k = si.cls;
+  M.desc.textContent = si.cls === "err" || si.cls === "load" ? `${si.glyph} ${si.text}` : info.desc;
+  M.root.title = `${info.name} · ${info.desc}`;
+  if (document.activeElement !== M.vol) {
+    M.vol.value = pct(engine.vol);
+    M.vol.style.setProperty("--v", engine.vol.toFixed(3));
+    M.volNum.textContent = pct(engine.vol);
+  }
+  miniSleep();
+  wake();
+}
+
+function miniSleep() {
+  const sl = engine.sleepLeft(), sec = Math.ceil(sl / 1000);
+  if (sec === mini.lastSleep) return;
+  mini.lastSleep = sec;
+  mini.sleep.textContent = sl ? `☾ ${mmss(sl)}` : "";
+}
+
+function miniVisible() {
+  return !!mini && mini.shown && !document.hidden && mini.root.isConnected && document.body.dataset.mode !== "desktop";
+}
+
+// zen: fade to 0.2 after 4 s without pointer / key / focus; anything brings it back
+function poke() {
+  if (!mini) return;
+  if (mini.idle) { mini.idle = false; mini.root.classList.remove("is-idle"); }
+  clearTimeout(mini.idleT);
+  if (mini.zen) mini.idleT = setTimeout(() => { if (mini && mini.zen) { mini.idle = true; mini.root.classList.add("is-idle"); } }, 4000);
+}
+
+function drawMini(now, playing) {
+  const M = mini;
+  if (now - (M.polled || 0) > 250) { M.polled = now; miniSleep(); }
+  const cv = M.cv, w = cv.clientWidth, hh = cv.clientHeight;
+  // the pill breathes with the music: border glow follows the level
+  const lv = playing && !RM.matches ? clamp(audio.level * 1.4, 0, 1) : 0;
+  if (Math.abs(lv - (M.lv || 0)) > 0.015) { M.lv = lv; M.root.style.setProperty("--lv", lv.toFixed(3)); }
+  if (!w || !hh) return; // spectrum is dropped on narrow screens
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(hh * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(hh * dpr); }
+  const c = cv.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, hh);
+  const plain = RM.matches, C = mColors;
+  const gap = 2, bw = (w - gap * (MB - 1)) / MB, base = hh - 1.5, top = 2, span = base - top;
+
+  // baseline
+  c.fillStyle = C.line;
+  c.fillRect(0, base + 0.5, w, 1);
+
+  if (!playing) { // standby: a row of dim dots, one slow scanner light
+    const at = plain ? -1 : Math.floor(((now / 2400) % 1) * (MB + 6)) - 3;
+    for (let i = 0; i < MB; i++) {
+      mVals[i] *= plain ? 0 : 0.86; mPeaks[i] *= 0.9;
+      const x = i * (bw + gap), d = Math.abs(i - at);
+      const tail = d < 3 ? 1 - d / 3 : 0;
+      const bh = Math.max(1.5, mVals[i] * span);
+      c.fillStyle = tail ? rgba(C.accent, 0.25 + 0.55 * tail) : C.lineHi;
+      c.fillRect(x, base - bh, bw, bh);
+    }
+    return;
+  }
+
+  const grad = c.createLinearGradient(0, top, 0, base);
+  grad.addColorStop(0, C.accent);
+  grad.addColorStop(1, rgba(C.accent, 0.28));
+  if (C.glow && !plain) { c.shadowColor = rgba(C.accent, 0.6); c.shadowBlur = 6; }
+  for (let i = 0; i < MB; i++) {
+    // lower 48 of 64 bands, two per bar (the top 16 are mostly air)
+    const t = Math.min(1, Math.pow((bands[i * 2] + bands[i * 2 + 1]) / 2, 1.4) * 1.2); // a little expansion so loud and quiet bands part
+    if (plain) mVals[i] = t;
+    else mVals[i] += (t - mVals[i]) * (t > mVals[i] ? 0.6 : 0.16);
+    const v = mVals[i];
+    if (v > mPeaks[i]) mPeaks[i] = v; else mPeaks[i] = Math.max(0, mPeaks[i] - (plain ? 1 : 0.011));
+    const x = i * (bw + gap), bh = Math.max(1.5, v * span);
+    c.fillStyle = grad;
+    c.fillRect(x, base - bh, bw, bh);
+    if (v > 0.78 && !plain) { // hot tip
+      c.fillStyle = C.hot;
+      c.fillRect(x, base - bh, bw, Math.min(3, bh));
+    }
+  }
+  c.shadowBlur = 0;
+  if (!plain) { // peak caps fall back slowly
+    c.fillStyle = C.accent;
+    for (let i = 0; i < MB; i++) {
+      if (mPeaks[i] < 0.06) continue;
+      c.globalAlpha = 0.4 + 0.5 * mPeaks[i];
+      c.fillRect(i * (bw + gap), Math.round(base - 3 - mPeaks[i] * span), bw, 1);
+    }
+    c.globalAlpha = 1;
+  }
+}
+
+let miniOff = [];
+function mountMini(stageEl, opts = {}) {
+  if (!stageEl) return noiseUI;
+  if (!mini) {
+    mini = buildMini();
+    audio.retain();
+    const onAny = () => poke();
+    const onVis = () => wake();
+    const evs = ["pointermove", "pointerdown", "keydown", "focusin", "wheel", "touchstart"];
+    for (const ev of evs) addEventListener(ev, onAny, { passive: true, capture: true });
+    document.addEventListener("visibilitychange", onVis);
+    const mo = new MutationObserver(() => { readMiniColors(); wake(); });
+    mo.observe(document.body, { attributes: true, attributeFilter: ["data-theme"] });
+    const onRM = () => wake();
+    RM.addEventListener("change", onRM);
+    miniOff = [
+      () => { for (const ev of evs) removeEventListener(ev, onAny, { capture: true }); },
+      () => document.removeEventListener("visibilitychange", onVis),
+      () => mo.disconnect(),
+      () => RM.removeEventListener("change", onRM),
+    ];
+  }
+  if (opts.onExpand) mini.onExpand = opts.onExpand;
+  mini.zen = stageEl.id === "stage-zen";
+  if (mini.root.parentNode !== stageEl) stageEl.append(mini.root);
+  readMiniColors();
+  renderMini();
+  poke();
+  wake();
+  return noiseUI;
+}
+
+function unmountMini() {
+  if (!mini) return;
+  clearTimeout(mini.idleT);
+  for (const fn of miniOff) fn();
+  miniOff = [];
+  mini.root.remove();
+  mini = null;
+  audio.release();
+}
+
+// ---------------------------------------------------------------- commands (noise / radio / sleep)
+
+const USAGE = {
+  noise: "usage: noise [genre|preset|layer [0-100]] · noise off <layer> · noise bpm|dark|density|vol <n> · noise save <name> · noise list",
+  radio: "usage: radio [station|off] · radio lists the stations",
+  sleep: "usage: sleep <1-600>m|<n>h|off",
+};
+const allPresets = () => [...PRESETS, ...userPresets];
+const known = () => ({ ...KNOWN, presets: allPresets().map((p) => p.id) });
+function nowLine() {
+  const info = miniInfo();
+  return hasSelection() ? `${info.name}${info.desc && info.desc !== info.name ? ` · ${info.desc}` : ""}` : "nothing selected";
+}
+const fail = (cmd, message) => (message.startsWith("usage:") ? [[`${cmd}: ${message}`, "err"]] : [[`${cmd}: ${message}`, "err"], [USAGE[cmd], "err"]]);
+
+function run(cmd, argStr = "") {
+  const words = String(argStr).trim().split(/\s+/).filter(Boolean);
+  const args = words[0]?.toLowerCase() === "save" ? ["save", ...words.slice(1)] : words.map((w) => w.toLowerCase());
+  if (cmd === "noise") return runNoise(args);
+  if (cmd === "radio") return runRadio(args);
+  if (cmd === "sleep") return runSleep(args);
+  return [[`${cmd}: unknown`, "err"]];
+}
+
+function runNoise(args) {
+  const r = parseNoise(args, known());
+  switch (r.type) {
+    case "error": return fail("noise", r.message);
+    case "toggle": {
+      const was = isBusy() && engine.state !== "paused";
+      toggle();
+      return was ? [["noise: ■ stopped"]] : [[`noise: ▶ ${nowLine()}`, "ok"]];
+    }
+    case "list": {
+      const sel = activePreset;
+      const st = engine.state === "playing" ? "▶" : engine.state === "idle" ? "■" : engine.state;
+      return [
+        [`now      ${st} ${nowLine()} · vol ${pct(engine.vol)}${engine.sleepLeft() ? ` · ☾ ${mmss(engine.sleepLeft())}` : ""}`, "ok"],
+        [`genres   ${KNOWN.genres.map((id) => (pick === "music" && state.genre === id ? `[${id}]` : id)).join(" ")}`],
+        [`layers   ${KNOWN.layers.map((id) => (id in layers.active() ? `[${id} ${pct(layers.active()[id])}]` : id)).join(" ")}`],
+        [`presets  ${allPresets().map((p) => (p.id === sel ? `[${p.id}]` : p.id)).join(" ")}`],
+        ["radio    radio lists the stations · sleep 30m fades out and stops", "dim"],
+      ];
+    }
+    case "save": {
+      const p = save(r.name);
+      return p ? [[`noise: saved ★ ${p.name} · play it with: noise ${p.id}`, "ok"]] : fail("noise", "usage: noise save <name>");
+    }
+    case "layerOff": {
+      const act = layers.active();
+      if (!(r.id in act)) return [[`noise: ${layerOf(r.id).name} is not on`]];
+      lastVol[r.id] = act[r.id];
+      activePreset = null;
+      layers.off(r.id);
+      idleIfEmpty();
+      return [[`noise: ${layerOf(r.id).name} off`, "ok"]];
+    }
+    case "vol":
+      engine.setVol(r.vol);
+      return [[`noise: vol ${pct(r.vol)}`, "ok"]];
+    case "knob": {
+      let v = r.value, note = "";
+      if (r.knob === "bpm") {
+        const g = genreOf(state.genre);
+        v = clamp(Math.round(v), g.bpm[0], g.bpm[1]);
+        if (v !== r.value) note = ` (${g.name} runs ${g.bpm[0]}-${g.bpm[1]})`;
+      }
+      setKnob(r.knob, v);
+      return [[`noise: ${r.knob} ${r.knob === "bpm" ? v : v.toFixed(2)}${note}`, "ok"]];
+    }
+    case "layer": {
+      activePreset = null;
+      layers.set(r.id, r.vol);
+      lastVol[r.id] = r.vol;
+      if (!isBusy()) start();
+      return [[`noise: + ${layerOf(r.id).name} ${pct(r.vol)}`, "ok"]];
+    }
+    case "preset": {
+      applyPreset(r.id);
+      const p = allPresets().find((x) => x.id === r.id);
+      return [[`noise: ▶ ${p.name} · ${presetTitle(p)}`, "ok"]];
+    }
+    case "genre":
+      activePreset = null;
+      playGenre(r.id);
+      return [[`noise: ▶ ${genreOf(r.id).name} · ${Math.round(state.knobs.bpm)} bpm`, "ok"]];
+  }
+  return fail("noise", "usage");
+}
+
+function runRadio(args) {
+  const r = parseRadio(args, known());
+  if (r.type === "error") return fail("radio", r.message);
+  if (r.type === "off") {
+    if (!radio.current && pick !== "radio") return [["radio: already off"]];
+    radio.stop();
+    if (pick === "radio") { pick = "none"; state.station = null; persist(); renderSoon(); }
+    idleIfEmpty();
+    return [["radio: off", "ok"]];
+  }
+  if (r.type === "play") {
+    activePreset = null;
+    const st = stationById(r.id);
+    radio.play(r.id).catch(() => {});
+    return [[`radio: tuning in ${st.name} · ${st.vibe}`, "ok"]];
+  }
+  const w = Math.max(...STATIONS.map((s) => s.id.length));
+  return [
+    ...VIBES.flatMap((vibe) => STATIONS.filter((s) => s.vibe === vibe).map((s) => {
+      const cur = radio.current?.id === s.id;
+      return [`${cur ? "▶" : " "} ${s.id.padEnd(w)}  ${s.name} · ${s.vibe}`, cur ? "ok" : ""];
+    })),
+    ["radio <station> tunes in · radio off", "dim"],
+  ];
+}
+
+function runSleep(args) {
+  const r = parseSleep(args);
+  if (r.type === "error") return fail("sleep", r.message);
+  if (r.type === "off") { setSleep(0); return [["sleep: off", "ok"]]; }
+  setSleep(r.minutes);
+  const hrs = Math.floor(r.minutes / 60), m = r.minutes % 60;
+  const len = hrs ? `${hrs}h${m ? ` ${m}m` : ""}` : `${m}m`;
+  return [[`sleep: fades out over the last minute and stops in ${len}${isLive() ? "" : " (nothing is playing yet)"}`, "ok"]];
+}
+
+// tab completion pools for os.js
+function completions(cmd, prev) {
+  if (cmd === "radio") return ["off", ...KNOWN.stations];
+  if (cmd === "sleep") return ["15m", "30m", "1h", "90m", "off"];
+  if (cmd === "noise" && prev === "off") return Object.keys(layers.active()).length ? Object.keys(layers.active()) : KNOWN.layers;
+  if (cmd === "noise") return ["list", "save", "off", "bpm", "dark", "density", "vol", ...allPresets().map((p) => p.id), ...KNOWN.genres, ...KNOWN.layers];
+  return [];
 }
 
 // ---------------------------------------------------------------- mount / unmount
@@ -1070,7 +1432,6 @@ function mount(el) {
   ui.meta = ui.win.querySelector(".win__meta");
   ui.inView = true;
   seenGenre = music.genre; seenStation = radio.current?.id ?? null;
-  layersKey = JSON.stringify(layers.active());
   readColors();
 
   const onKey = (e) => {
@@ -1078,7 +1439,11 @@ function mount(el) {
     const t = e.target;
     const typing = t instanceof HTMLElement && (t.isContentEditable || /^(TEXTAREA|SELECT)$/.test(t.tagName) || (t.tagName === "INPUT" && !["range", "checkbox", "radio", "button"].includes(t.type)));
     if (typing) return;
-    if (e.key === " ") { e.preventDefault(); toggle(); }
+    if (e.key === " ") {
+      // a focused control keeps its own space (activate a button, pick a radio/tab, nudge a slider)
+      if (t instanceof Element && t.closest("button, a[href], summary, [role=button], [role=radio], [role=tab], [role=slider], [role=checkbox], [role=switch]")) return;
+      e.preventDefault(); toggle();
+    }
     else if (e.key === "[" || e.key === "]") { e.preventDefault(); stepGenre(e.key === "]" ? 1 : -1); }
   };
   ui.win.addEventListener("keydown", onKey);
@@ -1130,7 +1495,7 @@ function unmount() {
 
 export const noiseUI = {
   mount, unmount,
-  mountMini() {}, unmountMini() {}, // Task 8
+  mountMini, unmountMini, run, completions,
   applyPreset, save, toggle,
   get state() { return state; },
   get presets() { return [...PRESETS, ...userPresets]; },

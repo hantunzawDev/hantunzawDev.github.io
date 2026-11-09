@@ -18,6 +18,7 @@ Drag a window by its title bar, resize it from the bottom-right corner, and doub
 | `fortune` | A quote picked for the time and day, with a hint like "morning · monday". `again` picks another. |
 | `feed.rss` | Hacker News, DEV, GitHub (top new repos this week) and Wikipedia news |
 | `viz.app` | Three.js audio visualizer: orb (particle sphere), terrain (scrolling spectrogram landscape) or pulsar (stacked ridgelines), with bloom, driven by your mic or by shared tab/system audio (Chrome/Edge). Closed until you open it. |
+| `noise.app` | Noise machine and music: 23 ambient layers (colored noise, rain, café, binaural beats…), nine generated genres from lofi to dark techno, internet radio, presets and a sleep timer. In focus and zen a small player sits at the bottom of the stage. Closed until you open it. |
 | `game.exe` | Snake, a typing test and bughunt (a small raycasting shooter) |
 | `config.ini` | Name, fallback city, 12h/24h clock, theme, quotes, links |
 
@@ -66,6 +67,7 @@ quotes  quote [now] · quote add <text> -- <author> @tags · quote ls · quote r
 fun     neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee
 games   snake · type · guess · fps
 audio   viz [mic|sys|off] · viz orb|terrain|pulsar
+noise   noise (play/stop, alt+n) · noise <genre|preset> · noise <layer> [0-100] · noise off <layer> · noise bpm|dark|density|vol <n> · noise save <name> · noise list · radio [station|off] · sleep 30m|off
 system  open|close|max <app> · ls · layout reset · theme <name> · name|city <x> · 12h|24h · history · clear
 ```
 
@@ -75,6 +77,8 @@ system  open|close|max <app> · ls · layout reset · theme <name> · name|city 
 - `matrix` runs until you press a key or click.
 - `viz sys` asks to share a tab or screen: tick "share audio". Video is dropped right away; nothing is recorded or sent anywhere. Safari and Firefox can only use `viz mic`.
 - `quote now` shows the current quote and why it was picked.
+- `noise night-coding` plays a preset; `noise rain 60` adds rain at 60%; `noise list` shows every genre, layer and preset. Nothing plays until you ask, and your last mix comes back (silent) on reload.
+- `sleep 30m` fades the sound out over the last minute, then stops. `alt+n` plays or stops from anywhere.
 
 ## Make it your browser's home page
 

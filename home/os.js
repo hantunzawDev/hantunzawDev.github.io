@@ -623,8 +623,9 @@ function setMode(mode) {
   $$(".modes [role=radio]").forEach((b) => { const on = b.dataset.mode === mode; b.setAttribute("aria-checked", String(on)); b.tabIndex = on ? 0 : -1; });
   if (mode === "focus") { renderStageTask(); $("#stage-focus [data-focus-start]").focus(); }
   if (mode === "zen") renderZen();
+  syncMini();
   if (mode !== "desktop" && !reduce && window.gsap && !document.hidden) {
-    gsap.from(`#stage-${mode} > *`, { opacity: 0, y: 8, duration: 0.3, stagger: 0.05, ease: "power2.out", clearProps: "opacity,transform" });
+    gsap.from(`#stage-${mode} > *:not(.nz-mini)`, { opacity: 0, y: 8, duration: 0.3, stagger: 0.05, ease: "power2.out", clearProps: "opacity,transform" });
   }
   return true;
 }
@@ -644,6 +645,7 @@ $$(".modes [role=radio]").forEach((b) => {
 // alt+1/2/3 switch modes from anywhere, even while typing (alt+digit types nothing useful)
 addEventListener("keydown", (e) => {
   if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (e.code === "KeyN") { e.preventDefault(); loadNoise().then((ui) => ui.toggle(), (err) => log(`noise.app: ${err.message}`, "err")); return; }
   const m = { Digit1: "desktop", Digit2: "focus", Digit3: "zen" }[e.code];
   if (!m) return;
   e.preventDefault();
@@ -988,7 +990,26 @@ function mountViz() { vizApp ??= viz($("#viz"), { setMeta: (m) => ($("#viz-meta"
 function unmountViz() { vizApp?.stop(); vizApp = null; }
 /* noise.app (its modules load on first open; Tone.js only when a genre plays) */
 let noiseP = null, noiseWanted = false;
-const loadNoise = () => (noiseP ??= import("./noise/ui.js").then((m) => m.noiseUI, (e) => { noiseP = null; throw e; }));
+const loadNoise = () => (noiseP ??= import("./noise/ui.js").then((m) => { queueMicrotask(syncMini); return m.noiseUI; }, (e) => { noiseP = null; throw e; }));
+// mini player on the focus/zen stage; it decides itself whether there is anything to show
+function syncMini() {
+  const mode = document.body.dataset.mode;
+  noiseP?.then((ui) => {
+    if (document.body.dataset.mode !== mode) return;
+    if (mode === "desktop") ui.unmountMini();
+    else ui.mountMini($(`#stage-${mode}`), { onExpand: () => { setMode("desktop"); openApp("noise"); } });
+  }, () => {});
+}
+// noise / radio / sleep commands: the module loads on first use (no sound until asked)
+function noiseCmd(cmd, a) {
+  return loadNoise().then((ui) => { for (const [text, cls = ""] of ui.run(cmd, a || "")) log(text, cls); }, (e) => log(`noise.app: ${e.message}`, "err"));
+}
+// boot: bring back the last selection (silent) so the mini player can show it
+function noiseRestore() {
+  const src = store.get("noise.src", null), saved = store.get("noise", null);
+  const hasLayers = saved && typeof saved.layers === "object" && saved.layers && Object.keys(saved.layers).length > 0;
+  if (src === "music" || src === "radio" || hasLayers) loadNoise().catch(() => {});
+}
 function mountNoise() {
   noiseWanted = true;
   loadNoise().then((ui) => { if (noiseWanted && !win("noise").hidden) ui.mount($("#noise")); }, (e) => log(`noise.app: ${e.message}`, "err"));
@@ -1095,6 +1116,7 @@ const HELP = {
   fun:    "neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee",
   games:  "snake · type · guess · fps (bughunt)",
   audio:  "viz [mic|sys|off] · viz orb|terrain|pulsar",
+  noise:  "noise (play/stop, alt+n) · noise <genre|preset> · noise <layer> [0-100] · noise off <layer> · noise bpm|dark|density|vol <n> · noise save <name> · noise list · radio [station|off] · sleep 30m|off",
   bg:     "bg [off|audio|drift|aurora|grid|scan|glow] [focus|zen] · bg orb|terrain|pulsar · bg mic|sys|off · [ ] cycle on stage",
   system: "open|close|max <app> · ls · layout reset · tile [on|off] · float [app] [on|off] · snap on|off · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
 };
@@ -1282,6 +1304,9 @@ const COMMANDS = {
     log("viz.app: pick mic or sys (chrome/edge: tick \"share audio\"). keys 1 2 3 switch scenes.", "ok");
   },
   visualizer: (a) => COMMANDS.viz(a),
+  noise: (a) => noiseCmd("noise", a),
+  radio: (a) => noiseCmd("radio", a),
+  sleep: (a) => noiseCmd("sleep", a),
   bg: (a) => {
     const [x = "", where = ""] = (a || "").toLowerCase().split(/\s+/);
     const stage = ["focus", "zen"].includes(where) ? where : ["focus", "zen"].includes(document.body.dataset.mode) ? document.body.dataset.mode : null;
@@ -1462,6 +1487,19 @@ input.addEventListener("keydown", (e) => {
     else if (c === "quote" && r.length === 1) { pool = ["now", "add", "ls", "rm", "rotate", "pack", "match", "tags"]; prefix = c + " "; }
     else if (c === "quote" && r[0] === "rotate") { pool = Object.keys(ROTATIONS); prefix = "quote rotate "; r.shift(); }
     else if (c === "quote" && r[0] === "pack") { pool = PACK_NAMES; prefix = "quote pack "; r.shift(); }
+    else if (["noise", "radio", "sleep"].includes(c) && (r.length === 1 || (c === "noise" && r.length === 2 && r[0] === "off"))) {
+      // pools come from noise.app's own tables; the module loads on the first Tab
+      e.preventDefault();
+      const word = r[r.length - 1].toLowerCase(), pre = c + " " + (r.length === 2 ? r[0] + " " : "");
+      const line = input.value;
+      loadNoise().then((ui) => {
+        if (input.value !== line) return;
+        const hits = ui.completions(c, r.length === 2 ? r[0] : null).filter((p) => p.startsWith(word));
+        if (hits.length === 1) input.value = pre + hits[0] + " ";
+        else if (hits.length > 1) log(hits.join("  "));
+      }, () => {});
+      return;
+    }
     if (!pool) return;
     const word = (r.length ? r.join(" ") : c).toLowerCase();
     const hits = pool.filter((p) => p.startsWith(word));
@@ -1546,6 +1584,7 @@ async function start() {
   relayout();
   if (!win("viz").hidden) mountViz();
   if (!win("noise").hidden) mountNoise();
+  noiseRestore();
   if (!win("game").hidden) closeApp("game"); // games don't resume across reloads
   addEventListener("resize", () => { syncOrientation(); syncTermDock(); relayout(); });
   renderDock();

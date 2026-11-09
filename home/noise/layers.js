@@ -390,15 +390,22 @@ function teardown() {
   stopTicker();
 }
 
+// selection listeners: whoever changes a layer (window, command, preset), everyone hears it
+const changeFns = new Set();
+function changed() { for (const fn of [...changeFns]) { try { fn(); } catch (e) { console.error(e); } } }
+
 export const layers = {
   set(id, vol = 0.6) {
     if (!BUILD[id]) return;
     vol = Math.min(1, Math.max(0, +vol || 0));
+    const was = wanted.get(id);
     if (vol > 0) wanted.set(id, vol); else wanted.delete(id);
     sync();
+    if (was !== wanted.get(id)) changed();
   },
-  off(id) { wanted.delete(id); sync(); },
+  off(id) { const had = wanted.delete(id); sync(); if (had) changed(); },
   active() { return Object.fromEntries(wanted); },
+  onChange(fn) { changeFns.add(fn); return () => changeFns.delete(fn); },
   // smoothed 0..1 loudness for UI tiles (volume × the layer's own modulation)
   level(id) {
     const now = performance.now();
