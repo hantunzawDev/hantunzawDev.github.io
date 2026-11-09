@@ -6,13 +6,14 @@
 // stream stops when nobody holds it. read(t) refreshes the shared bands /
 // waveform / level / bass and is cheap to call twice in one frame.
 
-export const SOURCES = ["mic", "sys", "off"];
+export const SOURCES = ["mic", "sys", "noise", "off"];
 export const BANDS = 64;
 
 export const bands = new Float32Array(BANDS); // 0..1, smoothed per band
 export const waveF = new Float32Array(256);   // -1..1, downsampled waveform
 
 let ctx = null, analyser = null, srcNode = null, stream = null;
+let tapNode = null, tapCtx = null; // noise.app's master tap (attachNode)
 let freq = null, wave = null, bandRanges = [];
 let holders = 0, lastT = -1, avgBass = 0, lastBeat = 0;
 const listeners = new Set();
@@ -30,6 +31,7 @@ export const audio = {
   },
   onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   setSource,
+  attachNode,
   read,
 };
 
@@ -39,13 +41,46 @@ function setState(src) {
   for (const fn of listeners) fn(src);
 }
 
+// noise.app hands over its master tap and AudioContext. The analyser has to live
+// on that context to hear it, so a previous (mic-only) context is retired.
+function attachNode(node, c) {
+  if (tapNode === node && tapCtx === c) return;
+  const wasNoise = audio.source === "noise";
+  if (wasNoise) stopStream();
+  tapNode = node; tapCtx = c;
+  if (wasNoise) { // rebuild on the new context, or fall back if it vanished
+    ensureAnalyser(c);
+    if (node) { srcNode = node; node.connect(analyser); } else setState("off");
+  }
+}
+
+function ensureAnalyser(c) {
+  if (ctx && ctx !== c) { // retire the old context: it only ever held a stopped mic node
+    srcNode?.disconnect(); srcNode = null;
+    analyser?.disconnect(); analyser = null;
+    ctx.close?.().catch(() => {});
+    ctx = null;
+  }
+  ctx ??= c ?? new AudioContext();
+  if (!analyser) {
+    analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.8;
+    freq = new Uint8Array(analyser.frequencyBinCount);
+    wave = new Uint8Array(analyser.fftSize);
+    bandRanges = makeBandRanges(ctx.sampleRate, analyser.frequencyBinCount);
+  }
+}
+
 async function setSource(next, log = () => {}) {
   if (!SOURCES.includes(next)) return false;
   stopStream();
   setState("off");
   if (next === "off") return true;
   try {
-    if (next === "mic") {
+    if (next === "noise") {
+      if (!tapNode) throw new Error("noise.app isn't playing. start it first");
+    } else if (next === "mic") {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error("this browser has no microphone access");
       stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
@@ -60,16 +95,16 @@ async function setSource(next, log = () => {}) {
       }
     }
     if (!holders) { stopStream(); return false; } // everyone left while the prompt was up
-    ctx ??= new AudioContext();
-    if (ctx.state === "suspended") await ctx.resume();
-    if (!analyser) {
-      analyser = ctx.createAnalyser();
-      analyser.fftSize = 2048;
-      analyser.smoothingTimeConstant = 0.8;
-      freq = new Uint8Array(analyser.frequencyBinCount);
-      wave = new Uint8Array(analyser.fftSize);
-      bandRanges = makeBandRanges(ctx.sampleRate, analyser.frequencyBinCount);
+    if (next === "noise") {
+      ensureAnalyser(tapCtx); // the engine's context: no resume here, the engine owns its transport
+      srcNode = tapNode;      // analyser only: the tap feeds the analyser, never the speakers
+      srcNode.connect(analyser);
+      setState("noise");
+      log("audio: listening to noise.app.", "ok");
+      return true;
     }
+    ensureAnalyser(ctx ?? tapCtx);
+    if (ctx.state === "suspended") await ctx.resume();
     srcNode = ctx.createMediaStreamSource(stream); // analyser only: never connected to ctx.destination
     srcNode.connect(analyser);
     const track = stream.getAudioTracks()[0];
