@@ -67,6 +67,22 @@ pre { font-family: inherit; white-space: pre-wrap; }
 .boot pre { color: var(--lime); text-shadow: var(--glow); font-size: 13px; line-height: 1.8; }
 .boot__skip { color: var(--dim); }
 
+/* hand-off from the hzsh terminal: CRT power-on. A lit dot stretches to a scanline,
+   the scanline opens to full height, then the glow fades into the boot log. */
+html.handoff body > :not(.boot):not(.crt) { visibility: hidden; }
+html.handoff .boot { display: flex; transform-origin: 50% 50%; animation: crt-on 640ms forwards; }
+html.handoff .boot::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: var(--text); animation: crt-glow 900ms forwards;
+}
+@keyframes crt-on {
+  0%   { transform: scale(0.004, 0.004); opacity: 0; animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1); }
+  6%   { transform: scale(0.004, 0.004); opacity: 1; animation-timing-function: cubic-bezier(0.77, 0, 0.175, 1); }
+  45%  { transform: scale(1, 0.004); animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1); }
+  100% { transform: scale(1, 1); opacity: 1; }
+}
+@keyframes crt-glow { 0%, 45% { opacity: 1; } 100% { opacity: 0; } }
+
 /* ---------- menubar ---------- */
 .menubar {
   position: fixed; inset: 0 0 auto; height: var(--menubar); z-index: 40;

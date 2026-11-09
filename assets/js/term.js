@@ -148,7 +148,7 @@ const FILES = { "about.txt": "about", "work.log": "work", "education.txt": "educ
 const HELP = [
   ["about", "who I am"], ["work", "where I've worked"], ["education", "where I studied"], ["projects", "things I've shipped"], ["stack", "languages and tools"],
   ["contact", "how to reach me"], ["resume", "open my resume (PDF)"], ["email", "copy my email address"],
-  ["github", "open GitHub"], ["linkedin", "open LinkedIn"], ["hzos", "my browser home page OS"],
+  ["github", "open GitHub"], ["linkedin", "open LinkedIn"], ["hzos", "boot my browser home page OS"],
   ["ls · cat <file>", "browse the home dir"], ["theme lime|amber|ice|purple", "change phosphor"],
   ["banner", "redraw the portrait"], ["history · clear", "shell stuff"],
 ];
@@ -171,7 +171,7 @@ const COMMANDS = {
   resume: () => { open(ME.resume, "_blank", "noopener"); return `Opening ${link(ME.resume, "resume.pdf")} in a new tab.`; },
   github: () => { open(ME.github, "_blank", "noopener"); return `Opening ${link(ME.github)}`; },
   linkedin: () => { open(ME.linkedin, "_blank", "noopener"); return `Opening ${link(ME.linkedin)}`; },
-  hzos: () => `hzOS is the tiny operating system I use as my browser home page: clock, weather, todos, pomodoro and a command line.\n${link("/home/", "launch hzOS ->")}`,
+  hzos: () => { pendingLaunch = true; return `<span class="dim">hzOS is the tiny operating system I use as my browser home page. Handing this session over…</span>`; },
   ls: () => Object.keys(FILES).map((f) => f.endsWith("/") ? `<span class="acc">${esc(f)}</span>` : esc(f)).join("   "),
   cat: (a) => {
     if (!a) return `<span class="err">cat: missing file.</span> Try ${run("ls")}`;
@@ -198,7 +198,7 @@ const COMMANDS = {
   hi: () => COMMANDS.hello(),
   matrix: () => { matrix(); return `<span class="dim">wake up, visitor... (any key to exit)</span>`; },
 };
-const ALIASES = { "?": "help", man: "help", edu: "education", school: "education", study: "education", experience: "work", jobs: "work", skills: "stack", cv: "resume", mail: "email", home: "hzos", cls: "clear", ll: "ls", dir: "ls" };
+const ALIASES = { "?": "help", man: "help", edu: "education", school: "education", study: "education", experience: "work", jobs: "work", skills: "stack", cv: "resume", mail: "email", home: "hzos", startx: "hzos", boot: "hzos", cls: "clear", ll: "ls", dir: "ls" };
 
 // closest command by edit distance, for typos like "wrok" or "projcts"
 function suggest(w) {
@@ -233,6 +233,7 @@ async function exec(raw, { record = true } = {}) {
   else html = await fn(arg);
   if (html === null) return; // clear
   entry(line, html);
+  if (pendingLaunch) { pendingLaunch = false; launchHzos(); return; }
   if (fn && ["about", "work", "education", "projects", "stack", "contact"].includes(name)) history.replaceState(null, "", "#" + name);
 }
 
@@ -316,6 +317,55 @@ function matrix() {
   const stop = () => { alive = false; cv.remove(); removeEventListener("keydown", stop, true); input.focus({ preventScroll: true }); };
   setTimeout(() => { addEventListener("keydown", stop, true); cv.addEventListener("click", stop); }, 300);
 }
+
+/* ---------- hzOS hand-off ---------- */
+// `hzos` stops this shell, collapses the window like a CRT switching off,
+// and hzOS at /home/ picks up from the same dot with a power-on.
+let pendingLaunch = false, launching = false;
+const HANDOFF = [
+  ["[ <span class=\"ok\">OK</span> ] stopping hzsh session", ""],
+  ["[ <span class=\"ok\">OK</span> ] flushing scrollback", ""],
+  ["loading hzOS kernel  ", "bar"],
+  ["switching tty1 -> hzos", "dim"],
+];
+async function launchHzos() {
+  if (launching) return;
+  launching = true;
+  const theme = store.get("theme", "lime");
+  const url = "home/?via=hzsh" + (theme !== "lime" ? "&theme=" + theme : "");
+  const pf = document.createElement("link"); pf.rel = "prefetch"; pf.href = "home/"; document.head.append(pf);
+  input.disabled = true;
+  if (reduced) { location.href = url; return; }
+
+  let skip = false;
+  const onSkip = () => { skip = true; };
+  addEventListener("keydown", onSkip, { once: true });
+  addEventListener("pointerdown", onSkip, { once: true });
+  const out = entry(null, "").appendChild(Object.assign(document.createElement("div"), { className: "out handoff" }));
+  for (const [txt, kind] of HANDOFF) {
+    if (skip) break;
+    const ln = document.createElement("div");
+    if (kind === "dim") ln.className = "dim";
+    ln.innerHTML = txt;
+    out.append(ln);
+    ln.scrollIntoView({ block: "end" });
+    if (kind === "bar") {
+      const b = document.createElement("span"); b.className = "acc"; ln.append(b);
+      for (let i = 0; i <= 20 && !skip; i++) { b.textContent = "[" + "#".repeat(i) + ".".repeat(20 - i) + "]"; await sleep(16); }
+    } else await sleep(90);
+  }
+  removeEventListener("keydown", onSkip); removeEventListener("pointerdown", onSkip);
+  if (!skip) await sleep(180);
+  document.documentElement.classList.add("powering-off");
+  await sleep(760); // matches the crt-off keyframes
+  location.href = url;
+}
+// coming back with the back button restores this page from bfcache mid-collapse
+addEventListener("pageshow", (e) => {
+  if (!e.persisted) return;
+  document.documentElement.classList.remove("powering-off");
+  launching = false; input.disabled = false;
+});
 
 /* ---------- boot ---------- */
 const BOOT = [

@@ -915,13 +915,24 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) { lo
 /* =========================================================
    boot
    ========================================================= */
+// arriving from the hzsh terminal (`hzos` command): always boot, starting from
+// the dot the terminal's CRT power-off left behind
+const handoff = (() => {
+  const q = new URLSearchParams(location.search);
+  if (q.get("via") !== "hzsh") return null;
+  window.history.replaceState(null, "", location.pathname + location.hash);
+  return { theme: q.get("theme") };
+})();
+
 async function boot() {
   const firstToday = store.get("bootDay") !== dayKey();
   store.set("bootDay", dayKey());
-  if (!firstToday || reduce || document.hidden) return;
+  if ((!firstToday && !handoff) || reduce || document.hidden) { document.documentElement.classList.remove("handoff"); return; }
   const el = $("#boot"), pre = $("#boot-log");
   el.hidden = false;
+  if (handoff) await sleep(Math.max(0, 560 - performance.now())); // power-on started at first paint; let it open before text lands
   const lines = [
+    ...(handoff ? ["handoff from hzsh (tty1) ...... ok"] : []),
     `hzOS ${VERSION} · build ${dayKey().replace(/-/g, "")}`,
     "cpu .................... ok",
     `mount /home/${(settings.name || "user").toLowerCase()} ........ ok`,
@@ -942,10 +953,13 @@ async function boot() {
   }
   if (!skip) await sleep(350);
   el.hidden = true;
+  document.documentElement.classList.remove("handoff");
 }
 
 async function start() {
-  applyTheme(settings.theme || "lime");
+  // carry the terminal's phosphor over for visitors who haven't picked an hzOS theme
+  const savedTheme = store.get("settings", {}).theme;
+  applyTheme((!savedTheme && handoff?.theme && THEMES.includes(handoff.theme)) ? handoff.theme : settings.theme || "lime");
   APPS.forEach((app) => { enableWindow(win(app)); applyLayout(app); win(app).hidden = closed.has(app); });
   if (!win("game").hidden) closeApp("game"); // games don't resume across reloads
   addEventListener("resize", () => APPS.forEach(applyLayout));

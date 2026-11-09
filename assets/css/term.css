@@ -23,6 +23,7 @@
   --fs: 13px;
   --gut: clamp(12px, 3vw, 28px);
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   color-scheme: dark;
 }
 :root[data-theme="amber"] { --acc: #ffb000; --amber: #ffe08a; --line-hi: #5a4316; --line: #33270e; --bar: #17120a; --win: #110d07; --bg: #0b0905; --text: #f3e6cc; --muted: #c3ad86; --dim: #95835f; --glow: 0 0 8px rgba(255, 176, 0, 0.35); --glow-soft: 0 0 6px rgba(255, 176, 0, 0.22); }
@@ -184,6 +185,37 @@ html.revealing .fetch > .in { opacity: 1; transition: opacity 160ms var(--ease-o
 /* ---------- matrix easter egg ---------- */
 .matrix { position: fixed; inset: 0; z-index: 45; background: #000; cursor: pointer; }
 
+/* ---------- hzOS hand-off: CRT power-off ----------
+   the window squashes to a scanline, a lit line takes over and shrinks to a dot.
+   hzOS (/home) starts from that dot. transform + opacity only. */
+.log .handoff .ok { color: var(--acc); }
+html.powering-off .term {
+  position: relative; transform-origin: 50% 50%;
+  animation: crt-off 760ms forwards;
+}
+html.powering-off .term::after {
+  content: ""; position: absolute; inset: 0; background: var(--text);
+  opacity: 0; animation: crt-flash 760ms linear forwards; pointer-events: none;
+}
+html.powering-off body::after {
+  content: ""; position: fixed; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; z-index: 60;
+  background: var(--text); box-shadow: 0 0 10px 2px var(--acc), 0 0 42px 8px var(--acc);
+  opacity: 0; animation: crt-line 760ms forwards;
+}
+@keyframes crt-off {
+  0%   { transform: scale(1, 1); opacity: 1; animation-timing-function: cubic-bezier(0.77, 0, 0.175, 1); }
+  42%  { transform: scale(1, 0.004); opacity: 1; }
+  46%  { transform: scale(1, 0.004); opacity: 0; }
+  100% { transform: scale(1, 0.004); opacity: 0; }
+}
+@keyframes crt-flash { 0% { opacity: 0; } 40% { opacity: 0.85; } 100% { opacity: 0.85; } }
+@keyframes crt-line {
+  0%, 40% { opacity: 0; transform: scaleX(1); }
+  44%     { opacity: 1; transform: scaleX(1); animation-timing-function: cubic-bezier(0.77, 0, 0.175, 1); }
+  78%     { opacity: 1; transform: scaleX(0.004); animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1); }
+  100%    { opacity: 0; transform: scaleX(0.004); }
+}
+
 .noscript { padding: 16px var(--gut); color: var(--amber); }
 
 /* ---------- responsive ---------- */
@@ -202,4 +234,6 @@ html.revealing .fetch > .in { opacity: 1; transition: opacity 160ms var(--ease-o
   .boot { transition: none; }
   html.revealing .fetch > * { opacity: 1; }
   .chips button { transition: none; }
+  html.powering-off .term { animation: none; opacity: 0; transition: opacity 160ms ease; }
+  html.powering-off body::after { display: none; }
 }
