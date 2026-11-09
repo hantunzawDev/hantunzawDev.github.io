@@ -43,15 +43,45 @@ const DEFAULT_LAYOUT = {
   game:    [0.30, 0.06, 0.40, 0.88],
   config:  [0.30, 0.10, 0.36, 0.78],
 };
+// tall screens (vertical monitors): two even columns, map full width
+const PORTRAIT_LAYOUT = {
+  clock:   [0.012, 0.012, 0.482, 0.17],
+  wx:      [0.506, 0.012, 0.482, 0.17],
+  map:     [0.012, 0.192, 0.976, 0.26],
+  feed:    [0.012, 0.462, 0.482, 0.33],
+  focus:   [0.506, 0.462, 0.482, 0.16],
+  fortune: [0.506, 0.632, 0.482, 0.16],
+  todo:    [0.012, 0.802, 0.482, 0.186],
+  notes:   [0.506, 0.802, 0.482, 0.186],
+  game:    [0.06, 0.10, 0.88, 0.70],
+  config:  [0.10, 0.12, 0.80, 0.62],
+};
 const MIN_W = 220, MIN_H = 130;
-const layout = Object.assign({}, DEFAULT_LAYOUT, store.get("layout.v2", {}));
+// each orientation keeps its own defaults and its own saved edits
+const ORIENT = {
+  landscape: { key: "layout.v2", defaults: DEFAULT_LAYOUT },
+  portrait:  { key: "layout.portrait.v1", defaults: PORTRAIT_LAYOUT },
+};
+const orientation = () => (innerHeight > innerWidth ? "portrait" : "landscape");
+let orient = orientation();
+const loadLayout = (o) => Object.assign({}, ORIENT[o].defaults, store.get(ORIENT[o].key, {}));
+const layout = loadLayout(orient);
 const closed = new Set(store.get("closed.v2", ["config", "game"]));
 const desktop = $("#desktop");
 const win = (app) => $(`.win[data-app="${app}"]`);
 let zTop = 10;
 
 function saveLayout() {
-  store.set("layout.v2", Object.fromEntries(Object.entries(layout).filter(([k, v]) => v !== DEFAULT_LAYOUT[k])));
+  const { key, defaults } = ORIENT[orient];
+  store.set(key, Object.fromEntries(Object.entries(layout).filter(([k, v]) => v !== defaults[k])));
+}
+// swap to the other orientation's layout when the screen is rotated or resized across the line
+function syncOrientation() {
+  const o = orientation();
+  if (o === orient) return;
+  orient = o;
+  for (const k of Object.keys(layout)) delete layout[k];
+  Object.assign(layout, loadLayout(o));
 }
 function applyLayout(app) {
   const el = win(app);
@@ -162,8 +192,8 @@ function enableWindow(el) {
 }
 // put every window back to its default spot and reopen the default set
 function resetLayout() {
-  store.del("layout.v2");
-  Object.assign(layout, DEFAULT_LAYOUT);
+  store.del(ORIENT[orient].key);
+  Object.assign(layout, ORIENT[orient].defaults);
   desktop.classList.add("is-resetting");
   APPS.forEach((a) => { win(a).classList.remove("is-max"); applyLayout(a); });
   APPS.filter((a) => !["config", "game"].includes(a)).forEach((a) => openApp(a, { focus: false }));
@@ -962,7 +992,7 @@ async function start() {
   applyTheme((!savedTheme && handoff?.theme && THEMES.includes(handoff.theme)) ? handoff.theme : settings.theme || "lime");
   APPS.forEach((app) => { enableWindow(win(app)); applyLayout(app); win(app).hidden = closed.has(app); });
   if (!win("game").hidden) closeApp("game"); // games don't resume across reloads
-  addEventListener("resize", () => APPS.forEach(applyLayout));
+  addEventListener("resize", () => { syncOrientation(); APPS.forEach(applyLayout); });
   renderDock();
   front("clock");
   net();
