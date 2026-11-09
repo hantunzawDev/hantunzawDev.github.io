@@ -20,6 +20,7 @@ export const DEFAULT_LINKS = [
 export const settings = Object.assign(
   {
     name: "Han", city: "Yangon", h24: true, theme: "lime", links: DEFAULT_LINKS,
+    snap: true, tile: false, mfact: 0.55,
     qRotation: "hourly", qMatch: true, qp_dev: true, qp_stoic: true, qp_motivation: true, qp_rest: true, qCustom: "",
   },
   store.get("settings", {}),

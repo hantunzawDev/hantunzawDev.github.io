@@ -43,6 +43,7 @@
       <button type="button" role="radio" data-mode="focus" aria-checked="false">focus</button>
       <button type="button" role="radio" data-mode="zen" aria-checked="false">zen</button>
     </div>
+    <button type="button" class="menubar__reset menubar__tile" id="layout-tile" title="tile windows (alt+t)" aria-label="Tile windows" aria-pressed="false">▦</button>
     <button type="button" class="menubar__reset" id="layout-reset" title="reset layout" aria-label="Reset layout">↺</button>
     <div class="menubar__status">
       <span id="st-timer" hidden></span>
@@ -171,6 +172,9 @@
             <option value="paper">paper white</option>
           </select>
         </label>
+        <p class="prompt">[windows]</p>
+        <label class="row"><input name="snap" type="checkbox"> snap to edges &amp; corners</label>
+        <label class="row"><input name="tile" type="checkbox"> tile windows <span class="dim">alt+t · alt+j/k focus · alt+enter master · alt+h/l split</span></label>
         <p class="prompt">[quotes]</p>
         <label>rotate
           <select name="qRotation">
