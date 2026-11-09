@@ -29,9 +29,9 @@ const bootedAt = Date.now();
 /* =========================================================
    window manager: open/close, drag, resize, maximize
    ========================================================= */
-const APPS = ["clock", "wx", "todo", "notes", "focus", "map", "fortune", "feed", "term", "viz", "game", "config"];
-const FILES = { clock: "clock.app", wx: "wx.sh", todo: "todo.txt", notes: "notes.md", focus: "focus.exe", map: "world.map", fortune: "fortune", feed: "feed.rss", term: "term", viz: "viz.app", game: "game.exe", config: "config.ini" };
-const ALIAS = { world: "map", globe: "map", weather: "wx", settings: "config", news: "feed", quote: "fortune", timer: "focus", visualizer: "viz", audio: "viz", terminal: "term", shell: "term", sh: "term", cli: "term" };
+const APPS = ["clock", "wx", "todo", "notes", "focus", "map", "fortune", "feed", "term", "viz", "noise", "game", "config"];
+const FILES = { clock: "clock.app", wx: "wx.sh", todo: "todo.txt", notes: "notes.md", focus: "focus.exe", map: "world.map", fortune: "fortune", feed: "feed.rss", term: "term", viz: "viz.app", noise: "noise.app", game: "game.exe", config: "config.ini" };
+const ALIAS = { world: "map", globe: "map", weather: "wx", settings: "config", news: "feed", quote: "fortune", timer: "focus", visualizer: "viz", audio: "viz", terminal: "term", shell: "term", sh: "term", cli: "term", noise: "noise", sound: "noise", music: "noise", radio: "noise" };
 const appName = (a) => (Object.hasOwn(ALIAS, a) ? ALIAS[a] : a);
 // default layout as fractions of the desktop: x, y, w, h
 const DEFAULT_LAYOUT = {
@@ -45,6 +45,7 @@ const DEFAULT_LAYOUT = {
   fortune: [0.447, 0.725, 0.32, 0.25],
   term:    [0.20, 0.30, 0.46, 0.55],
   viz:     [0.22, 0.08, 0.50, 0.62],
+  noise:   [0.30, 0.06, 0.34, 0.80],
   game:    [0.30, 0.06, 0.40, 0.88],
   config:  [0.30, 0.10, 0.36, 0.78],
 };
@@ -60,6 +61,7 @@ const PORTRAIT_LAYOUT = {
   notes:   [0.506, 0.802, 0.482, 0.186],
   term:    [0.06, 0.55, 0.88, 0.38],
   viz:     [0.06, 0.14, 0.88, 0.45],
+  noise:   [0.10, 0.08, 0.80, 0.62],
   game:    [0.06, 0.10, 0.88, 0.70],
   config:  [0.10, 0.12, 0.80, 0.62],
 };
@@ -73,9 +75,10 @@ const orientation = () => (innerHeight > innerWidth ? "portrait" : "landscape");
 let orient = orientation();
 const loadLayout = (o) => Object.assign({}, ORIENT[o].defaults, store.get(ORIENT[o].key, {}));
 const layout = loadLayout(orient);
-const OPT_IN = ["config", "game", "viz", "term"]; // closed until asked for
+const OPT_IN = ["config", "game", "viz", "noise", "term"]; // closed until asked for
 const closed = new Set(store.get("closed.v2", OPT_IN));
 if (!store.get("viz.known")) { closed.add("viz"); store.set("viz.known", true); store.set("closed.v2", [...closed]); }
+if (!store.get("noise.known")) { closed.add("noise"); store.set("noise.known", true); store.set("closed.v2", [...closed]); }
 if (!store.get("term.known")) { closed.add("term"); store.set("term.known", true); store.set("closed.v2", [...closed]); }
 const desktop = $("#desktop");
 const win = (app) => $(`.win[data-app="${app}"]`);
@@ -104,7 +107,7 @@ const toFrac = (r, area) => [(r.left - area.left) / area.width, (r.top - area.to
 /* ---------- tiling: dwm-style master + stack ---------- */
 const GAP = 8; // px between tiles and snapped windows, and at the desktop edge
 // every window tiles; opt-in apps (viz, game, config) join at the bottom of the stack
-const TILE_ORDER = ["map", "clock", "feed", "todo", "notes", "wx", "focus", "fortune", "term", "viz", "game", "config"];
+const TILE_ORDER = ["map", "clock", "feed", "todo", "notes", "wx", "focus", "fortune", "term", "viz", "noise", "game", "config"];
 const tileable = (a) => APPS.includes(a);
 const tileOrder = (() => {
   const saved = store.get("tile.order", TILE_ORDER).filter((a) => APPS.includes(a) && tileable(a));
@@ -377,6 +380,7 @@ function openApp(app, { focus = true } = {}) {
   }
   if (app === "config") fillConfig();
   if (app === "viz") mountViz();
+  if (app === "noise") mountNoise();
   if (app === "term") syncTermDock();
   if (focus) (el.querySelector("textarea, input, select") || el.querySelector(".win__ctrl button"))?.focus();
   renderDock();
@@ -393,6 +397,7 @@ function closeApp(app) {
   store.set("closed.v2", [...closed]);
   if (app === "game") stopGame();
   if (app === "viz") unmountViz();
+  if (app === "noise") unmountNoise();
   if (app === "term") syncTermDock();
   if (tiling() && tileable(app)) relayout(true);
   renderDock();
@@ -430,7 +435,7 @@ function syncDock() {
 const APP_GROUPS = [
   ["desk", ["clock", "wx", "map", "fortune"]],
   ["work", ["todo", "notes", "focus", "feed", "term"]],
-  ["media", ["viz"]],
+  ["media", ["viz", "noise"]],
 ];
 const kbd = (t) => h("kbd", { className: "menu__kbd", textContent: t });
 function menuItem(label, run, { role = "menuitem", checked, disabled, hint } = {}) {
@@ -981,6 +986,14 @@ function startGame(name) {
 let vizApp = null;
 function mountViz() { vizApp ??= viz($("#viz"), { setMeta: (m) => ($("#viz-meta").textContent = m), log }); return vizApp; }
 function unmountViz() { vizApp?.stop(); vizApp = null; }
+/* noise.app (its modules load on first open; Tone.js only when a genre plays) */
+let noiseP = null, noiseWanted = false;
+const loadNoise = () => (noiseP ??= import("./noise/ui.js").then((m) => m.noiseUI, (e) => { noiseP = null; throw e; }));
+function mountNoise() {
+  noiseWanted = true;
+  loadNoise().then((ui) => { if (noiseWanted && !win("noise").hidden) ui.mount($("#noise")); }, (e) => log(`noise.app: ${e.message}`, "err"));
+}
+function unmountNoise() { noiseWanted = false; noiseP?.then((ui) => ui.unmount(), () => {}); }
 function stopGame() { game?.stop(); game = null; $("#game").replaceChildren(); $("#game-meta").textContent = ""; }
 let guess = null;
 
@@ -1532,6 +1545,7 @@ async function start() {
   syncTermDock();
   relayout();
   if (!win("viz").hidden) mountViz();
+  if (!win("noise").hidden) mountNoise();
   if (!win("game").hidden) closeApp("game"); // games don't resume across reloads
   addEventListener("resize", () => { syncOrientation(); syncTermDock(); relayout(); });
   renderDock();
