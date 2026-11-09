@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests; font-src https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; img-src 'self' data:; connect-src 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>404 · hantunzaw.dev</title>
+  <meta name="theme-color" content="#0a0c08">
+  <link rel="icon" href="/assets/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="/assets/css/term.css">
+  <style>
+    body { overflow: auto; }
+    .nf { max-width: 72ch; margin: 0 auto; padding: clamp(24px, 8vh, 72px) var(--gut) 48px; display: grid; gap: 14px; }
+    .nf pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .nf .err { color: var(--red); }
+    .nf .warn { color: var(--amber); }
+    .nf .box { border: 1px solid var(--line); background: var(--win); padding: 14px 16px; }
+    .nf .row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+    .nf button {
+      background: transparent; border: 1px solid var(--line-hi); color: var(--acc); padding: 8px 14px; min-height: 40px; cursor: pointer;
+    }
+    .nf button:hover { border-color: var(--acc); }
+    .nf button:disabled { color: var(--dim); border-color: var(--line); cursor: default; }
+    .nf label { color: var(--muted); }
+    .nf .field { border-bottom: 1px dashed var(--line-hi); padding: 2px 6px; color: var(--text); }
+  </style>
+</head>
+<body>
+  <main class="nf" id="nf">
+    <p><span class="ps1">echo@hantunzaw.dev</span><span class="dim">:</span><span class="ps-path">~</span><span class="dim">$</span> <span id="cmd"></span></p>
+    <div id="out" aria-live="polite"></div>
+    <p class="row"><a href="/">← back to the terminal</a><a href="/#contact">contact</a></p>
+  </main>
+  <script type="module" src="/assets/js/honeypot.js"></script>
+</body>
+</html>

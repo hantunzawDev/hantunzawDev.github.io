@@ -9,6 +9,7 @@ import { snake, typer } from "./games.js";
 import { bughunt } from "./fps.js";
 import { viz, VIZ_MODES, VIZ_SOURCES } from "./viz.js";
 import { cowsay, neofetch, eightBall, HACK, TRAIN, matrix, calc } from "./fun.js";
+import { sniff, calcJoke, bump, heat, meter, meterLines, applyHeat, consoleBait } from "../assets/js/eggs.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -30,7 +31,7 @@ const bootedAt = Date.now();
 const APPS = ["clock", "wx", "todo", "notes", "focus", "map", "fortune", "feed", "term", "viz", "game", "config"];
 const FILES = { clock: "clock.app", wx: "wx.sh", todo: "todo.txt", notes: "notes.md", focus: "focus.exe", map: "world.map", fortune: "fortune", feed: "feed.rss", term: "term", viz: "viz.app", game: "game.exe", config: "config.ini" };
 const ALIAS = { world: "map", globe: "map", weather: "wx", settings: "config", news: "feed", quote: "fortune", timer: "focus", visualizer: "viz", audio: "viz", terminal: "term", shell: "term", sh: "term", cli: "term" };
-const appName = (a) => ALIAS[a] || a;
+const appName = (a) => (Object.hasOwn(ALIAS, a) ? ALIAS[a] : a);
 // default layout as fractions of the desktop: x, y, w, h
 const DEFAULT_LAYOUT = {
   clock:   [0.012, 0.025, 0.30, 0.40],
@@ -1086,7 +1087,7 @@ const fmtUptime = (ms) => { const m = Math.floor(ms / 6e4); return m < 60 ? `${m
 
 const COMMANDS = {
   help: (a) => {
-    if (a && HELP[a]) return log(`${a.padEnd(7)}${HELP[a]}`);
+    if (a && Object.hasOwn(HELP, a)) return log(`${a.padEnd(7)}${HELP[a]}`);
     log(`hzOS ${VERSION} · commands (anything else searches the web)`, "ok");
     for (const [k, v] of Object.entries(HELP)) log(`${k.padEnd(7)}${v}`);
   },
@@ -1164,7 +1165,10 @@ const COMMANDS = {
   uptime: () => log(`up ${fmtUptime(Date.now() - bootedAt)} · focus today: ${store.get("focus." + dayKey(), 0)} · tasks open: ${todos.filter((t) => !t.done).length}`),
 
   // tools
-  "=": (a) => { try { log(`= ${calc(a)}`, "ok"); } catch (e) { log(`calc: ${e.message}`, "err"); } },
+  "=": (a) => {
+    const joke = calcJoke(a);
+    if (joke) { for (const l of joke) log(l, "err"); return hackMeter(); }
+    try { log(`= ${calc(a)}`, "ok"); } catch (e) { log(`calc: ${e.message}`, "err"); } },
   calc: (a) => COMMANDS["="](a),
   pass: (a) => {
     const n = Math.min(Math.max(+a || 20, 8), 64);
@@ -1212,7 +1216,10 @@ const COMMANDS = {
     log(`roll ${n}d${sides}: ${r.join(" + ")}${n > 1 ? ` = ${r.reduce((x, y) => x + y)}` : ""}`, "ok");
   },
   flip: () => log(`flip: ${Math.random() < 0.5 ? "heads" : "tails"}`, "ok"),
-  hack: async () => { for (const l of HACK) { log(l, l.startsWith("access") ? "ok" : ""); await sleep(reduce ? 0 : 260); } },
+  hack: async () => {
+    for (const l of HACK) { log(l, l.startsWith("access") ? "ok" : ""); await sleep(reduce ? 0 : 260); }
+    log(heat() ? `${meter()} · real attempts this session: ${heat()}` : `${meter()} · that was the pretend one. the real eggs need real attempts.`, "dim");
+  },
   sl: async () => {
     if (reduce) return art(TRAIN.join("\n"));
     const node = art("");
@@ -1232,7 +1239,7 @@ const COMMANDS = {
     const end = () => { stop(); removeEventListener("keydown", end, true); $("#matrix").removeEventListener("pointerdown", end); };
     setTimeout(() => { addEventListener("keydown", end, true); $("#matrix").addEventListener("pointerdown", end); }, 250);
   },
-  sudo: () => log(`${(settings.name || "user").toLowerCase()} is not in the sudoers file. this incident will be reported.`, "err"),
+  sudo: () => { log(`${(settings.name || "user").toLowerCase()} is not in the sudoers file. this incident will be reported.`, "err"); hackMeter(); },
   whoami: () => log(`${(settings.name || "friend").toLowerCase()} @ hzOS ${VERSION}`),
   ping: async () => {
     const t = performance.now();
@@ -1342,7 +1349,7 @@ function quoteCmd(a = "") {
       return log(`quote: removed "${parseLine(gone).text}"`, "ok");
     }
     case "rotate":
-      if (!ROTATIONS[arg]) return log(`usage: quote rotate ${Object.keys(ROTATIONS).join("|")} · now ${settings.qRotation}`, "err");
+      if (!Object.hasOwn(ROTATIONS, arg)) return log(`usage: quote rotate ${Object.keys(ROTATIONS).join("|")} · now ${settings.qRotation}`, "err");
       settings.qRotation = arg; qSlot = slotKey(arg, new Date()); qSalt = 0; save();
       return log(`quote: rotates ${ROTATIONS[arg]}`, "ok");
     case "pack": {
@@ -1367,6 +1374,23 @@ function quoteCmd(a = "") {
   }
 }
 
+/* ---------- easter eggs for hack attempts (../assets/js/eggs.js) ---------- */
+// commands whose argument is the user's own text or a search: never hijacked by a joke
+const TEXT_CMDS = new Set(["t", "todo", "note", "name", "city", "quote", "quotes", "b64", "unb64", "g", "search", "yt", "ddg", "gh", "define", "wiki"]);
+function hackMeter() {
+  const b = bump();
+  const [m, ...more] = meterLines(b);
+  log(m, "dim");
+  for (const l of more) log(l, "ok");
+  if (b.maxed) log(h("a", { href: "/#contact", textContent: "→ hantunzaw.dev/#contact" }));
+}
+function hackJoke(egg, wasSearch) {
+  for (const l of egg.lines) log(l, "err");
+  hackMeter();
+  if (wasSearch) log("(searching for it instead? use: g <query>)", "dim");
+}
+function hackWink() { log("stored safely as plain text 😉", "dim"); hackMeter(); }
+
 function run(raw) {
   const line = raw.trim();
   if (!line) return;
@@ -1376,9 +1400,12 @@ function run(raw) {
   const [cmd, ...rest] = line.split(/\s+/);
   const arg = rest.join(" ");
   const key = cmd.toLowerCase();
+  const link = links().find((l) => l.name.toLowerCase() === line.toLowerCase());
+  const egg = link ? null : sniff(line);
+  if (egg && TEXT_CMDS.has(key)) { if (egg.kind === "xss") hackWink(); } // keep the text, plain as ever
+  else if (egg) return hackJoke(egg, !Object.hasOwn(COMMANDS, key));
   if (key === "gh") return arg ? go(`https://github.com/search?q=${enc(arg)}`) : COMMANDS.news("gh");
   if (Object.hasOwn(COMMANDS, key)) return COMMANDS[key](arg);
-  const link = links().find((l) => l.name.toLowerCase() === line.toLowerCase());
   if (link) return go(link.url);
   if (/^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(line)) return go(`https://${line}`);
   COMMANDS.g(line);
@@ -1474,6 +1501,8 @@ async function boot() {
 }
 
 async function start() {
+  applyHeat(); // red prompt if they already tried hacking this session
+  consoleBait();
   // carry the terminal's phosphor over for visitors who haven't picked an hzOS theme
   const savedTheme = store.get("settings", {}).theme;
   applyTheme((!savedTheme && handoff?.theme && THEMES.includes(handoff.theme)) ? handoff.theme : settings.theme || "lime");

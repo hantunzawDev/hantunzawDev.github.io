@@ -105,15 +105,46 @@ export function matrix(canvas, color, bg) {
   return () => { cancelAnimationFrame(raf); removeEventListener("resize", size); canvas.hidden = true; };
 }
 
-// safe arithmetic: only numbers, operators, parentheses and a few Math names
+// safe arithmetic: a small recursive-descent parser (the page CSP forbids eval/Function)
+const CALC_HELP = "only numbers and + - * / % ^ ( ) sqrt abs round floor ceil min max sin cos tan log ln pi e";
+const CALC_CONSTS = { pi: Math.PI, e: Math.E };
+const CALC_FNS = {
+  sqrt: Math.sqrt, abs: Math.abs, round: Math.round, floor: Math.floor, ceil: Math.ceil,
+  min: Math.min, max: Math.max, sin: Math.sin, cos: Math.cos, tan: Math.tan, log: Math.log10, ln: Math.log,
+};
 export function calc(expr) {
-  const src = expr.replace(/\s+/g, "").replace(/\^/g, "**").replace(/×/g, "*").replace(/÷/g, "/");
-  const allowed = /^(?:[\d.+\-*/%(),]|\*\*|pi|e|sqrt|abs|round|floor|ceil|min|max|sin|cos|tan|log|ln)+$/i;
-  if (!src || !allowed.test(src)) throw new Error("only numbers and + - * / % ^ ( ) sqrt abs round floor ceil min max sin cos tan log ln pi e");
-  const js = src
-    .replace(/\bpi\b/gi, "Math.PI").replace(/\be\b/g, "Math.E").replace(/\blog\(/gi, "Math.log10(").replace(/\bln\(/gi, "Math.log(")
-    .replace(/\b(sqrt|abs|round|floor|ceil|min|max|sin|cos|tan)\(/gi, (m, f) => `Math.${f.toLowerCase()}(`);
-  const v = Function(`"use strict"; return (${js});`)();
+  const src = String(expr).replace(/\*\*/g, "^").replace(/×/g, "*").replace(/÷/g, "/").toLowerCase();
+  const toks = src.match(/\d*\.?\d+(?:e[+-]?\d+)?|[a-z]+|[-+*/%^(),]|\S/g) || [];
+  if (!toks.length) throw new Error(CALC_HELP);
+  if (toks.length > 400) throw new Error("expression too long");
+  let i = 0;
+  const peek = () => toks[i];
+  const take = (t) => { if (toks[i] !== t) throw new Error(t ? `expected "${t}"` : CALC_HELP); i++; };
+  const expr_ = () => { let v = term(); while (peek() === "+" || peek() === "-") v = toks[i++] === "+" ? v + term() : v - term(); return v; };
+  const term = () => {
+    let v = unary();
+    while (peek() === "*" || peek() === "/" || peek() === "%") { const op = toks[i++], r = unary(); v = op === "*" ? v * r : op === "/" ? v / r : v % r; }
+    return v;
+  };
+  const unary = () => (peek() === "-" ? (i++, -unary()) : peek() === "+" ? (i++, unary()) : power());
+  const power = () => { const b = primary(); return peek() === "^" ? (i++, b ** unary()) : b; };
+  const primary = () => {
+    const t = toks[i++];
+    if (t === undefined) throw new Error("unexpected end");
+    if (/^\d*\.?\d+(?:e[+-]?\d+)?$/.test(t)) return parseFloat(t);
+    if (t === "(") { const v = expr_(); take(")"); return v; }
+    if (Object.hasOwn(CALC_CONSTS, t)) return CALC_CONSTS[t];
+    if (Object.hasOwn(CALC_FNS, t)) {
+      take("(");
+      const args = [expr_()];
+      while (peek() === ",") { i++; args.push(expr_()); }
+      take(")");
+      return CALC_FNS[t](...args);
+    }
+    throw new Error(CALC_HELP);
+  };
+  const v = expr_();
+  if (i < toks.length) throw new Error(CALC_HELP);
   if (typeof v !== "number" || !Number.isFinite(v)) throw new Error("not a finite number");
   return +v.toPrecision(12);
 }

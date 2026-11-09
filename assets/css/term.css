@@ -152,6 +152,8 @@ html.revealing .fetch > .in { opacity: 1; transition: opacity 160ms var(--ease-o
 }
 
 .ps1 { color: var(--acc); text-shadow: var(--glow); font-weight: 600; }
+/* earned by trying to hack the site (see eggs.js) */
+.hacker .ps1 { color: var(--red); text-shadow: none; }
 .ps-path { color: var(--amber); }
 .promptline { display: flex; align-items: baseline; gap: 1ch; margin-top: 12px; }
 .promptline label { white-space: nowrap; flex: none; }

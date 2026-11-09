@@ -411,6 +411,8 @@ body:not([data-mode="desktop"]) .menubar__apps { visibility: hidden; }
 .cmd__line { display: flex; align-items: center; gap: 10px; }
 .cmd__line label { white-space: nowrap; color: var(--muted); }
 .cmd__ps { color: var(--lime); text-shadow: var(--glow); }
+/* earned by trying to hack the site (see ../assets/js/eggs.js) */
+.hacker .cmd__ps { color: var(--red); text-shadow: none; }
 .cmd__cwd { color: var(--amber); }
 .cmd__line input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--text); caret-color: var(--lime); font-size: 13px; }
 .cmd__line kbd { font-family: inherit; color: var(--dim); border: 1px solid var(--line-hi); padding: 0 6px; }

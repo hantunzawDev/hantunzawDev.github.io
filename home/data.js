@@ -2,8 +2,18 @@
 // UI-free so any shell can render it.
 
 /* ---------- storage ---------- */
+// a saved value whose shape differs from the default (an old format, a hand edit, a corrupted
+// write) falls back to the default instead of crashing boot, e.g. `todos.filter is not a function`
+const shape = (v) => (v === null ? "null" : Array.isArray(v) ? "array" : typeof v);
 export const store = {
-  get(k, d) { try { const v = localStorage.getItem("hz." + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  get(k, d) {
+    try {
+      const raw = localStorage.getItem("hz." + k);
+      if (!raw) return d;
+      const v = JSON.parse(raw);
+      return d === undefined || d === null || shape(v) === shape(d) ? v : d;
+    } catch { return d; }
+  },
   set(k, v) { try { localStorage.setItem("hz." + k, JSON.stringify(v)); } catch { /* private mode */ } },
   del(k) { try { localStorage.removeItem("hz." + k); } catch {} },
 };
@@ -17,14 +27,18 @@ export const DEFAULT_LINKS = [
   "site | https://www.hantunzaw.dev",
 ].join("\n");
 
-export const settings = Object.assign(
-  {
-    name: "Han", city: "Yangon", h24: true, theme: "lime", links: DEFAULT_LINKS,
-    snap: true, tile: false, mfact: 0.55,
-    qRotation: "hourly", qMatch: true, qp_dev: true, qp_stoic: true, qp_motivation: true, qp_rest: true, qCustom: "",
-  },
-  store.get("settings", {}),
-);
+const SETTINGS_DEFAULTS = {
+  name: "Han", city: "Yangon", h24: true, theme: "lime", links: DEFAULT_LINKS,
+  snap: true, tile: false, mfact: 0.55,
+  qRotation: "hourly", qMatch: true, qp_dev: true, qp_stoic: true, qp_motivation: true, qp_rest: true, qCustom: "",
+};
+export const settings = { ...SETTINGS_DEFAULTS };
+// copy saved fields one by one: skip prototype keys and any field whose type no longer matches
+for (const [k, v] of Object.entries(store.get("settings", {}))) {
+  if (k === "__proto__" || k === "constructor" || k === "prototype") continue;
+  if (Object.hasOwn(SETTINGS_DEFAULTS, k) && shape(v) !== shape(SETTINGS_DEFAULTS[k])) continue;
+  settings[k] = v;
+}
 for (const k of ["calMode", "calKey", "calIds", "icalUrl", "proxy"]) delete settings[k];
 export function saveSettings() { store.set("settings", settings); }
 

@@ -1,6 +1,7 @@
 // hantunzaw.dev terminal home. No build step, no dependencies.
 // Content lives in ME below: edit it there, the commands render from it.
 import { PORTRAIT } from "./portrait.js";
+import { sniff, bump, heat, meter, meterLines, applyHeat, consoleBait, MAX_HEAT } from "./eggs.js";
 
 /* ---------- content ---------- */
 const ME = {
@@ -50,6 +51,8 @@ const ME = {
 /* ---------- helpers ---------- */
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// look up typed input as an own key only, so `__proto__` or `constructor` never hit Object.prototype
+const own = (o, k) => (Object.hasOwn(o, k) ? o[k] : undefined);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("hzsite." + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("hzsite." + k, JSON.stringify(v)); } catch {} },
@@ -175,12 +178,12 @@ const COMMANDS = {
   ls: () => Object.keys(FILES).map((f) => f.endsWith("/") ? `<span class="acc">${esc(f)}</span>` : esc(f)).join("   "),
   cat: (a) => {
     if (!a) return `<span class="err">cat: missing file.</span> Try ${run("ls")}`;
-    const c = FILES[a] || FILES[a + "/"];
+    const c = own(FILES, a) || own(FILES, a + "/");
     if (!c) return `<span class="err">cat: ${esc(a)}: No such file or directory</span>`;
-    if (a.endsWith("/") || FILES[a + "/"]) return `<span class="err">cat: ${esc(a)}: Is a directory.</span> Showing it anyway:\n\n` + COMMANDS[c]();
+    if (a.endsWith("/") || own(FILES, a + "/")) return `<span class="err">cat: ${esc(a)}: Is a directory.</span> Showing it anyway:\n\n` + COMMANDS[c]();
     return COMMANDS[c]();
   },
-  cd: (a) => (!a || a === "~") ? "" : FILES[a] || FILES[a + "/"] ? `<span class="dim">Nice try. This shell only has one room.</span> ${run(FILES[a] || FILES[a + "/"])}` : `<span class="err">cd: no such directory: ${esc(a)}</span>`,
+  cd: (a) => (!a || a === "~") ? "" : own(FILES, a) || own(FILES, a + "/") ? `<span class="dim">Nice try. This shell only has one room.</span> ${run(own(FILES, a) || own(FILES, a + "/"))}` : `<span class="err">cd: no such directory: ${esc(a)}</span>`,
   pwd: () => "/home/han",
   date: () => `${esc(fmtTime(new Date(), { dateStyle: "full", timeStyle: "long" }))} <span class="dim">(Han's time)</span>`,
   echo: (a) => esc(a),
@@ -190,8 +193,11 @@ const COMMANDS = {
   neofetch: () => COMMANDS.banner(),
   history: () => hist.length ? hist.map((h, i) => `<span class="dim">${String(i + 1).padStart(3)}</span>  ${esc(h)}`).join("\n") : "<span class=\"dim\">empty</span>",
   clear: () => { log.innerHTML = ""; return null; },
-  sudo: () => `<span class="err">han is the only user in the sudoers file.</span> This incident will be reported.`,
-  rm: (a) => /-rf?\s*\//.test(a) ? `<span class="warn">rm: refusing to remove "/".</span> I worked hard on this site.` : `<span class="err">rm: permission denied</span>`,
+  sudo: () => `<span class="err">han is the only user in the sudoers file.</span> This incident will be reported.\n` + heatHtml(),
+  rm: (a) => /-rf?\s*\//.test(a) ? `<span class="warn">rm: refusing to remove "/".</span> I worked hard on this site.\n` + heatHtml() : `<span class="err">rm: permission denied</span>`,
+  hack: () => heat() ? `<span class="warn">${esc(meter())}</span> <span class="dim">· attempts this session: ${heat()}</span>` +
+    (heat() >= MAX_HEAT ? `\nYou've seen everything. Next step: ${run("contact")}` : `\n<span class="dim">Keep poking. There are more eggs in here.</span>`) :
+    `<span class="dim">${esc(meter())} · you haven't actually tried anything yet. Go on, I patched it.</span>`,
   vim: () => `<span class="dim">You're now stuck in vim. Just kidding.</span> Type ${run("help")}.`,
   exit: () => `<span class="dim">There's no leaving.</span> But if you must: ${link(ME.linkedin, "say hi on LinkedIn")} first.`,
   hello: () => `Hey! Start with ${run("about")}.`,
@@ -214,6 +220,13 @@ function suggest(w) {
   return best;
 }
 
+// one more hack attempt: the meter line, a rank-up, and the pitch at the top rank
+function heatHtml() {
+  const b = bump();
+  const [m, ...more] = meterLines(b);
+  return `<span class="dim">${esc(m)}</span>` + more.map((l) => `\n<span class="acc">${esc(l)}</span>`).join("") + (b.maxed ? ` ${run("contact")}` : "");
+}
+
 const hist = [];
 let hIdx = 0;
 
@@ -221,10 +234,12 @@ async function exec(raw, { record = true } = {}) {
   const line = raw.trim();
   if (record && line) { hist.push(line); hIdx = hist.length; }
   if (!line) { entry("", ""); return; }
+  const egg = sniff(line);
+  if (egg) { entry(line, `<span class="warn">${egg.lines.map(esc).join("\n")}</span>\n` + heatHtml()); return; }
   const [first, ...rest] = line.split(/\s+/);
-  const name = ALIASES[first.toLowerCase()] || first.toLowerCase();
+  const name = own(ALIASES, first.toLowerCase()) || first.toLowerCase();
   const arg = rest.join(" ");
-  const fn = COMMANDS[name];
+  const fn = own(COMMANDS, name);
   let html;
   if (!fn) {
     const guess = suggest(first.toLowerCase());
@@ -420,7 +435,7 @@ async function start() {
   document.documentElement.classList.remove("revealing");
   items.forEach((el) => el.classList.remove("in"));
 
-  if (hash && (COMMANDS[hash] || ALIASES[hash])) await exec(hash, { record: false });
+  if (hash && (own(COMMANDS, hash) || own(ALIASES, hash))) await exec(hash, { record: false });
   else entry(null, `Welcome. I'm Han, and this is my terminal. Try ${run("about")}, ${run("work")} or ${run("projects")}, or type ${run("help")}.`, { scroll: false });
   if (matchMedia("(pointer: fine)").matches) input.focus({ preventScroll: true });
 }
@@ -430,5 +445,7 @@ async function start() {
   const acc = getComputedStyle(document.documentElement).getPropertyValue("--acc").trim() || "#b6f36a";
   console.log(`%chzOS%c  you found the console. 👋`, `font: 700 20px ui-monospace, monospace; color: ${acc}`, "font: 13px ui-monospace, monospace");
   console.log("%cCurious how it's built? Ask me instead of copying it:\n  github   https://github.com/hantunzawDev\n  linkedin https://www.linkedin.com/in/hantunzaw/\nFound a bug or a security issue? Type `contact` in the terminal.", "font: 12px ui-monospace, monospace; line-height: 1.6");
+  consoleBait();
 })();
+applyHeat(); // keep the red prompt if they already earned it this session (on hzOS or the 404 page too)
 start();
