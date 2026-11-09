@@ -158,6 +158,11 @@
       <div class="win__body game" id="game"></div>
     </section>
 
+    <section class="win" data-app="term" aria-label="Terminal" hidden>
+      <header class="win__bar"><span class="win__title">term</span><span class="win__meta">han@hzos</span><span class="win__ctrl"><button type="button" data-close aria-label="Close terminal (docks the command line back to the bottom)">x</button></span></header>
+      <div class="win__body term" id="term"></div>
+    </section>
+
     <section class="win" data-app="config" aria-label="Settings" hidden>
       <header class="win__bar"><span class="win__title">config.ini</span><span class="win__ctrl"><button type="button" data-close aria-label="Close settings">x</button></span></header>
       <form class="win__body config" id="config" autocomplete="off">
@@ -243,6 +248,7 @@
       <label for="cmd-input"><span class="cmd__ps">han@hzos</span>:<span class="cmd__cwd">~</span>$</label>
       <input id="cmd-input" type="text" spellcheck="false" autocapitalize="off" placeholder="type help, a command, or anything to search">
       <kbd class="hide-sm">/</kbd>
+      <button type="button" class="cmd__pop hide-sm" id="cmd-pop" title="open as a window">⧉</button>
     </form>
   </footer>
 

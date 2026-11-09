@@ -289,7 +289,7 @@ body:not([data-mode="desktop"]) #layout-tile { visibility: hidden; }
 .todo__add input, .config input, .config select, .config textarea {
   flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--text); caret-color: var(--lime);
 }
-.todo__add input::placeholder, .cmd input::placeholder, .config ::placeholder { color: var(--dim); }
+.todo__add input::placeholder, .cmd__line input::placeholder, .config ::placeholder { color: var(--dim); }
 
 /* focus */
 .focus { display: flex; flex-direction: column; justify-content: center; gap: 8px; }
@@ -412,8 +412,23 @@ body:not([data-mode="desktop"]) .menubar__apps { visibility: hidden; }
 .cmd__line label { white-space: nowrap; color: var(--muted); }
 .cmd__ps { color: var(--lime); text-shadow: var(--glow); }
 .cmd__cwd { color: var(--amber); }
-.cmd input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--text); caret-color: var(--lime); font-size: 13px; }
-.cmd kbd { font-family: inherit; color: var(--dim); border: 1px solid var(--line-hi); padding: 0 6px; }
+.cmd__line input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--text); caret-color: var(--lime); font-size: 13px; }
+.cmd__line kbd { font-family: inherit; color: var(--dim); border: 1px solid var(--line-hi); padding: 0 6px; }
+.cmd__pop { border: 1px solid var(--line-hi); background: none; color: var(--dim); padding: 0 6px; line-height: 1.5; cursor: pointer; transition: color .12s ease, border-color .12s ease; }
+.cmd__pop:active { transform: translate(1px, 1px); }
+@media (hover: hover) and (pointer: fine) { .cmd__pop:hover { color: var(--lime); border-color: var(--lime); } }
+
+/* term window: the same command line, moved into a window. footer goes away and gives the desktop its space */
+body.term-docked { --cmdbar: 0px; }
+body.term-docked footer.cmd { display: none; }
+.term { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+.term .cmd__out {
+  position: static; flex: 1; min-height: 0; max-height: none; display: flex; padding: 10px 14px;
+  background: transparent; border: 0; pointer-events: auto; overflow-y: auto;
+}
+.term .cmd__out:empty { display: flex; }
+.term .cmd__line { flex: none; padding: 8px 10px 8px 14px; border-top: 1px dashed var(--line-hi); }
+.term .cmd__line kbd { display: none; }
 /* viz.app */
 .viz { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px 10px; }
 .viz__board { position: relative; flex: 1 1 0; min-height: 120px; border: 1px solid var(--line); overflow: hidden; }

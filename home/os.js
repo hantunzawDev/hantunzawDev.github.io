@@ -27,9 +27,9 @@ const bootedAt = Date.now();
 /* =========================================================
    window manager: open/close, drag, resize, maximize
    ========================================================= */
-const APPS = ["clock", "wx", "todo", "notes", "focus", "map", "fortune", "feed", "viz", "game", "config"];
-const FILES = { clock: "clock.app", wx: "wx.sh", todo: "todo.txt", notes: "notes.md", focus: "focus.exe", map: "world.map", fortune: "fortune", feed: "feed.rss", viz: "viz.app", game: "game.exe", config: "config.ini" };
-const ALIAS = { world: "map", globe: "map", weather: "wx", settings: "config", news: "feed", quote: "fortune", timer: "focus", visualizer: "viz", audio: "viz" };
+const APPS = ["clock", "wx", "todo", "notes", "focus", "map", "fortune", "feed", "term", "viz", "game", "config"];
+const FILES = { clock: "clock.app", wx: "wx.sh", todo: "todo.txt", notes: "notes.md", focus: "focus.exe", map: "world.map", fortune: "fortune", feed: "feed.rss", term: "term", viz: "viz.app", game: "game.exe", config: "config.ini" };
+const ALIAS = { world: "map", globe: "map", weather: "wx", settings: "config", news: "feed", quote: "fortune", timer: "focus", visualizer: "viz", audio: "viz", terminal: "term", shell: "term", sh: "term", cli: "term" };
 const appName = (a) => ALIAS[a] || a;
 // default layout as fractions of the desktop: x, y, w, h
 const DEFAULT_LAYOUT = {
@@ -41,6 +41,7 @@ const DEFAULT_LAYOUT = {
   notes:   [0.237, 0.455, 0.20, 0.52],
   focus:   [0.447, 0.455, 0.32, 0.25],
   fortune: [0.447, 0.725, 0.32, 0.25],
+  term:    [0.20, 0.30, 0.46, 0.55],
   viz:     [0.22, 0.08, 0.50, 0.62],
   game:    [0.30, 0.06, 0.40, 0.88],
   config:  [0.30, 0.10, 0.36, 0.78],
@@ -55,6 +56,7 @@ const PORTRAIT_LAYOUT = {
   fortune: [0.506, 0.632, 0.482, 0.16],
   todo:    [0.012, 0.802, 0.482, 0.186],
   notes:   [0.506, 0.802, 0.482, 0.186],
+  term:    [0.06, 0.55, 0.88, 0.38],
   viz:     [0.06, 0.14, 0.88, 0.45],
   game:    [0.06, 0.10, 0.88, 0.70],
   config:  [0.10, 0.12, 0.80, 0.62],
@@ -69,9 +71,10 @@ const orientation = () => (innerHeight > innerWidth ? "portrait" : "landscape");
 let orient = orientation();
 const loadLayout = (o) => Object.assign({}, ORIENT[o].defaults, store.get(ORIENT[o].key, {}));
 const layout = loadLayout(orient);
-const OPT_IN = ["config", "game", "viz"]; // closed until asked for
+const OPT_IN = ["config", "game", "viz", "term"]; // closed until asked for
 const closed = new Set(store.get("closed.v2", OPT_IN));
 if (!store.get("viz.known")) { closed.add("viz"); store.set("viz.known", true); store.set("closed.v2", [...closed]); }
+if (!store.get("term.known")) { closed.add("term"); store.set("term.known", true); store.set("closed.v2", [...closed]); }
 const desktop = $("#desktop");
 const win = (app) => $(`.win[data-app="${app}"]`);
 let zTop = 10;
@@ -99,7 +102,7 @@ const toFrac = (r, area) => [(r.left - area.left) / area.width, (r.top - area.to
 /* ---------- tiling: dwm-style master + stack ---------- */
 const GAP = 8; // px between tiles and snapped windows, and at the desktop edge
 // every window tiles; opt-in apps (viz, game, config) join at the bottom of the stack
-const TILE_ORDER = ["map", "clock", "feed", "todo", "notes", "wx", "focus", "fortune", "viz", "game", "config"];
+const TILE_ORDER = ["map", "clock", "feed", "todo", "notes", "wx", "focus", "fortune", "term", "viz", "game", "config"];
 const tileable = (a) => APPS.includes(a);
 const tileOrder = (() => {
   const saved = store.get("tile.order", TILE_ORDER).filter((a) => APPS.includes(a) && tileable(a));
@@ -372,6 +375,7 @@ function openApp(app, { focus = true } = {}) {
   }
   if (app === "config") fillConfig();
   if (app === "viz") mountViz();
+  if (app === "term") syncTermDock();
   if (focus) (el.querySelector("textarea, input, select") || el.querySelector(".win__ctrl button"))?.focus();
   renderDock();
   if (small()) el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
@@ -387,6 +391,7 @@ function closeApp(app) {
   store.set("closed.v2", [...closed]);
   if (app === "game") stopGame();
   if (app === "viz") unmountViz();
+  if (app === "term") syncTermDock();
   if (tiling() && tileable(app)) relayout(true);
   renderDock();
   return true;
@@ -422,7 +427,7 @@ function syncDock() {
 /* ---------- menubar menus: ◆ hzOS · apps · view ---------- */
 const APP_GROUPS = [
   ["desk", ["clock", "wx", "map", "fortune"]],
-  ["work", ["todo", "notes", "focus", "feed"]],
+  ["work", ["todo", "notes", "focus", "feed", "term"]],
   ["media", ["viz"]],
 ];
 const kbd = (t) => h("kbd", { className: "menu__kbd", textContent: t });
@@ -441,7 +446,8 @@ const MENUS = {
   sys: () => [
     menuItem("about hzOS", () => COMMANDS.neofetch()),
     menuItem("settings…", () => openApp("config")),
-    menuItem("command line", () => input.focus(), { hint: "/" }),
+    menuItem("command line", () => focusCmd(), { hint: "/" }),
+    menuItem(win("term").hidden ? "open terminal window" : "dock terminal", () => (win("term").hidden ? openApp("term") : closeApp("term"))),
     menuItem("help", () => COMMANDS.help()),
   ],
   apps: () => [
@@ -604,6 +610,7 @@ function setMode(mode) {
   store.set("mode", mode);
   $("#stage-focus").hidden = mode !== "focus";
   $("#stage-zen").hidden = mode !== "zen";
+  syncTermDock();
   $$(".modes [role=radio]").forEach((b) => { const on = b.dataset.mode === mode; b.setAttribute("aria-checked", String(on)); b.tabIndex = on ? 0 : -1; });
   if (mode === "focus") { renderStageTask(); $("#stage-focus [data-focus-start]").focus(); }
   if (mode === "zen") renderZen();
@@ -1019,19 +1026,45 @@ let outTimer = 0;
 function log(content, cls = "") {
   const node = typeof content === "string" ? h("span", { className: cls, textContent: content }) : content;
   out.append(node);
-  while (out.childElementCount > 60) out.firstElementChild.remove();
+  while (out.childElementCount > (termDocked ? 500 : 60)) out.firstElementChild.remove();
   out.scrollTop = out.scrollHeight;
-  armOutTimer();
+  if (!termDocked) armOutTimer();
   return node;
 }
 function art(text) { return log(h("span", { className: "art", textContent: text })); }
 function armOutTimer(ms = 15000) {
   clearTimeout(outTimer);
+  if (termDocked) return; // the terminal window keeps its scrollback
   outTimer = setTimeout(function hide() {
     if (document.activeElement === input) { outTimer = setTimeout(hide, 4000); return; }
     out.replaceChildren();
   }, ms);
 }
+/* ---------- term window: the command line can live in the footer or in its own window ---------- */
+let termDocked = false;
+const cmdFooter = $("footer.cmd");
+// in the window on wide screens in desktop mode; back in the footer otherwise (focus/zen, phones, closed)
+function syncTermDock() {
+  const want = !win("term").hidden && !small() && document.body.dataset.mode === "desktop";
+  if (want === termDocked) return;
+  const hadFocus = document.activeElement === input;
+  termDocked = want;
+  const home = want ? $("#term") : cmdFooter;
+  home.append(out, $("#cmd-form"));
+  document.body.classList.toggle("term-docked", want);
+  $("#cmd-pop").textContent = want ? "⤓" : "⧉";
+  $("#cmd-pop").title = want ? "dock to the bottom bar" : "open as a window";
+  if (!want) armOutTimer();
+  out.scrollTop = out.scrollHeight;
+  relayout();
+  if (hadFocus) input.focus();
+}
+function focusCmd() {
+  if (termDocked) front("term");
+  input.focus();
+}
+$("#cmd-pop").addEventListener("click", () => (win("term").hidden ? openApp("term") : closeApp("term")));
+
 const history = store.get("history", []);
 let hIdx = history.length;
 
@@ -1379,7 +1412,7 @@ input.addEventListener("keydown", (e) => {
 addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName);
   const inGame = (game || vizApp) && document.activeElement?.tagName === "CANVAS";
-  if (e.key === "/" && !typing && !inGame) { e.preventDefault(); input.focus(); }
+  if (e.key === "/" && !typing && !inGame) { e.preventDefault(); focusCmd(); }
   if (e.key === "Escape" && !typing && document.body.dataset.mode !== "desktop") setMode("desktop");
 });
 
@@ -1446,10 +1479,11 @@ async function start() {
   applyTheme((!savedTheme && handoff?.theme && THEMES.includes(handoff.theme)) ? handoff.theme : settings.theme || "lime");
   APPS.forEach((app) => { enableWindow(win(app)); win(app).hidden = closed.has(app); });
   syncLayoutChip();
+  syncTermDock();
   relayout();
   if (!win("viz").hidden) mountViz();
   if (!win("game").hidden) closeApp("game"); // games don't resume across reloads
-  addEventListener("resize", () => { syncOrientation(); relayout(); });
+  addEventListener("resize", () => { syncOrientation(); syncTermDock(); relayout(); });
   renderDock();
   front("clock");
   net();
