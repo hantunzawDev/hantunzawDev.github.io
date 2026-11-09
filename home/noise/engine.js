@@ -85,7 +85,16 @@ function attachSource(name, src) {
   const rec = { ...src, wired: false, started: false };
   sources.set(name, rec);
   wire(rec);
-  if (state === "playing" || state === "paused" || state === "fading") startSource(rec);
+  if (state === "playing" || state === "paused" || state === "fading") {
+    if (!rec.load) startSource(rec);
+    else Promise.resolve().then(() => rec.load()).then(() => {
+      if (sources.get(name) === rec && (state === "playing" || state === "paused" || state === "fading")) startSource(rec);
+    }, (e) => {
+      if (sources.get(name) !== rec) return;
+      error = e?.message || String(e); // FAIL is only legal from loading; surface it without dropping playback
+      dispatch("FAIL"); emit();
+    });
+  }
   return () => { if (sources.get(name) === rec) detachSource(name); };
 }
 
@@ -180,11 +189,15 @@ function pause() {
 
 function stop() {
   cancelSleep();
-  epoch++; loadingP = null;
-  clearTimeout(suspendTimer);
   const had = state !== "idle";
   dispatch("STOP");
-  if (!ctx) return;
+  if (ctx) goIdle(had);
+}
+
+// Shared by stop() and the sleep timer's end: everything that must happen on entering idle.
+function goIdle(had) {
+  epoch++; loadingP = null;
+  clearTimeout(suspendTimer);
   glide(0, 0.04);
   for (const s of sources.values()) stopSource(s);
   releaseVisuals();
@@ -226,9 +239,7 @@ function done() {
   sleepTimers.forEach(clearTimeout); sleepTimers = []; sleepEnd = 0;
   if (state === "fading") {
     dispatch("TIMER_DONE");
-    for (const s of sources.values()) stopSource(s);
-    releaseVisuals();
-    emit();
+    goIdle(true);
   } else if (state !== "idle") stop(); // timer ran out while paused / loading
 }
 

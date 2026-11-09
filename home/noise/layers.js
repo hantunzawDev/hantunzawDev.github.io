@@ -11,7 +11,7 @@ import { fillNoise, makeRng } from "./gen.js";
 import { LAYERS, BRAINWAVE, CARRIER_HZ } from "./catalog.js";
 
 const TICK_MS = 200;
-const HORIZON = 0.6;            // seconds scheduled ahead of ctx.currentTime
+const HORIZON = 1.5;            // seconds scheduled ahead of ctx.currentTime
 const VOL_TC = 0.08;            // volume glide, never a step (no clicks)
 const GROUP = Object.fromEntries(LAYERS.map((l) => [l.id, l.group]));
 const TAU = Math.PI * 2;
@@ -45,7 +45,7 @@ function buffer(color) {
 // Per-instance toolbox. Everything created through it is cleaned up on dispose.
 function toolbox(dest) {
   const srcs = [], nodes = [], streams = [];
-  const q = []; let energy = 0, lastT = 0;
+  const q = []; let energy = 0, lastT = 0; // q: flat [t, a, t, a...]
   const tb = {
     ctx, dest, srcs, nodes, streams,
     keep(n) { nodes.push(n); return n; },
@@ -89,15 +89,21 @@ function toolbox(dest) {
         while (next < hz) { fire(next); next += gap(); }
       });
     },
-    // loudness bookkeeping: hit(t, a) at scheduled time t, read energy(now)
-    hit(t, a = 1) { q.push([t, a]); },
+    // loudness bookkeeping: hit(t, a) at scheduled time t. `pending` only ever
+    // holds hits within the scheduling horizon (tick() folds due ones into the
+    // envelope), so memory is O(1) whether or not the UI polls level().
+    hit(t, a = 1) { q.push(t, a); },
     energy(now, tau = 0.15) {
-      while (q.length && q[0][0] <= now) {
-        const [t, a] = q.shift();
-        energy *= Math.exp(-(t - lastT) / tau); lastT = t; energy += a;
+      let sum = 0, w = 0;
+      for (let i = 0; i < q.length; i += 2) {
+        if (q[i] <= now) sum += q[i + 1]; else { q[w++] = q[i]; q[w++] = q[i + 1]; }
       }
-      return Math.min(1, energy * Math.exp(-Math.max(0, now - lastT) / tau));
+      q.length = w;
+      if (now > lastT) { energy *= Math.exp(-(now - lastT) / tau); lastT = now; }
+      energy = Math.min(4, energy + sum);
+      return Math.min(1, energy);
     },
+    pending() { return q.length / 2; },
   };
   return tb;
 }
@@ -132,8 +138,11 @@ function rain(h, t0) {
 function thunder(h) {
   const strike = (t) => {
     const dur = rand(6, 9), amp = rand(0.6, 0.9);
-    const env = h.gain(0, h.dest), lp = h.filter("lowpass", 900, 0.7, env);
+    // per-strike nodes are not kept in h.nodes (that would grow forever): freed after the strike
+    const env = ctx.createGain(); env.gain.value = 0; env.connect(h.dest);
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 900; lp.Q.value = 0.7; lp.connect(env);
     const s = ctx.createBufferSource(); s.buffer = buffer("brown"); s.loop = true;
+    setTimeout(() => { for (const n of [s, lp, env]) { try { n.disconnect(); } catch {} } }, (dur + 0.6) * 1000);
     s.connect(lp); s.start(t, Math.random() * 3); s.stop(t + dur + 0.2);
     lp.frequency.setValueAtTime(rand(700, 1100), t);
     lp.frequency.exponentialRampToValueAtTime(70, t + dur);
@@ -355,7 +364,10 @@ function dispose(inst) {
 function tick() {
   if (!ctx) return;
   const now = ctx.currentTime, hz = now + HORIZON;
-  for (const inst of live.values()) for (const s of inst.h.streams) s(now, hz);
+  for (const inst of live.values()) {
+    for (const s of inst.h.streams) s(now, hz);
+    inst.mod(now); // folds due hits into the envelope even when nothing polls level()
+  }
 }
 function startTicker() { if (!ticker) ticker = setInterval(tick, TICK_MS); }
 function stopTicker() { clearInterval(ticker); ticker = 0; }
@@ -400,6 +412,8 @@ export const layers = {
   },
   // debug: number of running instances per id (a duplicate would show as a second node)
   liveCount() { const o = {}; for (const id of live.keys()) o[id] = 1; return o; },
+  // debug: bookkeeping sizes per live layer (must stay bounded)
+  sizes() { const o = {}; for (const i of live.values()) o[i.id] = { pending: i.h.pending(), nodes: i.h.nodes.length, srcs: i.h.srcs.length }; return o; },
   groupOf: (id) => GROUP[id],
 };
 
