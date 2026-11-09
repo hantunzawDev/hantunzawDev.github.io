@@ -142,7 +142,8 @@ function thunder(h) {
     const env = ctx.createGain(); env.gain.value = 0; env.connect(h.dest);
     const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 900; lp.Q.value = 0.7; lp.connect(env);
     const s = ctx.createBufferSource(); s.buffer = buffer("brown"); s.loop = true;
-    setTimeout(() => { for (const n of [s, lp, env]) { try { n.disconnect(); } catch {} } }, (dur + 0.6) * 1000);
+    // free them when the source actually ends (stop() is scheduled below), not on a wall-clock timer
+    s.onended = () => { for (const n of [s, lp, env]) { try { n.disconnect(); } catch {} } };
     s.connect(lp); s.start(t, Math.random() * 3); s.stop(t + dur + 0.2);
     lp.frequency.setValueAtTime(rand(700, 1100), t);
     lp.frequency.exponentialRampToValueAtTime(70, t + dur);
