@@ -13,11 +13,19 @@ export const xerp = (a, b, t) => a * Math.pow(b / a, t);
 
 export function kit(Tone) {
   const nodes = [];
-  const add = (node) => { nodes.push(node); stats.created++; return node; };
+  let disposed = false;
+  const add = (node) => {
+    nodes.push(node); stats.created++;
+    // Reverb renders its impulse asynchronously; a genre disposed mid-render
+    // (rapid switching) must not surface as an unhandled rejection.
+    if (node.ready && typeof node.ready.catch === "function") node.ready.catch((e) => { if (!disposed) console.error(e); });
+    return node;
+  };
   return {
     add,
     n: (name, opts) => add(new Tone[name](opts)),
     dispose() {
+      disposed = true;
       for (const node of nodes.splice(0).reverse()) {
         try { node.dispose(); } catch {}
         stats.disposed++;
@@ -106,7 +114,7 @@ export function snare(k, dest, o = {}) {
 // AudioWorklet loaded from a blob: URL, which the site CSP rightly refuses).
 export function crusher(k, bits) {
   const ws = k.n("WaveShaper", { length: 4096 });
-  const set = (b) => { const q = 2 ** (Math.max(1, b) - 1); ws.setMap((x) => Math.round(x * q) / q); };
+  const set = (b) => { const q = 2 ** (Math.max(4, b) - 1); ws.setMap((x) => Math.round(x * q) / q); }; // floor: 4 bits
   set(bits);
   ws.setBits = set;
   return ws;

@@ -11,24 +11,26 @@ export function techno(Tone, out, knobs) {
   const k = kit(Tone);
   const ROOT = 29; // F1
   const duckBus = k.n("Gain", 1); duckBus.connect(out);
-  const hatBus = k.n("Gain", 1); hatBus.connect(out);
   const verb = k.n("Reverb", { decay: 2.4, preDelay: 0.01, wet: 1 }); verb.connect(out);
   const send = k.n("Gain", 0.25); send.connect(verb);
 
+  // Kick drive stays fixed; dark closes a lowpass after it instead of adding fizz.
   const kickDrive = k.n("Distortion", { distortion: 0.2, oversample: "2x", wet: 0.35 });
-  kickDrive.connect(out);
+  const kickLp = k.n("Filter", { type: "lowpass", frequency: 12000, rolloff: -12 });
+  kickDrive.chain(kickLp, out);
   const kk = kick(k, kickDrive, { note: mtof(ROOT), decay: 0.45, pitchDecay: 0.05, octaves: 5.5, volume: -1 });
 
   const bass = k.n("MonoSynth", {
     oscillator: { type: "sawtooth" },
     filter: { type: "lowpass", rolloff: -24, Q: 2 },
-    envelope: { attack: 0.002, decay: 0.12, sustain: 0.25, release: 0.04 },
-    filterEnvelope: { attack: 0.002, decay: 0.09, sustain: 0, release: 0.05, baseFrequency: 90, octaves: 2.4 },
-    volume: -11,
+    envelope: { attack: 0.002, decay: 0.1, sustain: 0.2, release: 0.04 },
+    filterEnvelope: { attack: 0.002, decay: 0.08, sustain: 0, release: 0.05, baseFrequency: 90, octaves: 2.4 },
+    volume: -12,
   });
   bass.connect(duckBus);
 
   const acidDrive = k.n("Distortion", { distortion: 0.35, oversample: "2x", wet: 0.5 });
+  const acidTone = k.n("Filter", { type: "lowpass", frequency: 9000, rolloff: -12 });
   const acidDelay = k.n("FeedbackDelay", { delayTime: "8n.", feedback: 0.32, wet: 0.2 });
   const acidGain = k.n("Gain", 0);
   const acid = k.n("MonoSynth", {
@@ -38,28 +40,49 @@ export function techno(Tone, out, knobs) {
     filterEnvelope: { attack: 0.002, decay: 0.17, sustain: 0.06, release: 0.08, baseFrequency: 260, octaves: 3.4, exponent: 2 },
     volume: -15,
   });
-  acid.chain(acidDrive, acidDelay, acidGain, duckBus);
+  acid.chain(acidDrive, acidTone, acidDelay, acidGain, duckBus);
   acidGain.connect(send);
 
-  const ch = hat(k, hatBus, { decay: 0.028, hp: 8800, volume: -17, pan: 0.15 });
+  // hats / ride → hatBus (kick-ducked) → dark lowpass → level
+  const hatBus = k.n("Gain", 1);
+  const hatTone = k.n("Filter", { type: "lowpass", frequency: 16000, rolloff: -24 });
+  const hatLevel = k.n("Gain", 1);
+  hatBus.chain(hatTone, hatLevel, out);
+  const ch = hat(k, hatBus, { decay: 0.028, hp: 8800, volume: -18, pan: 0.15 });
   const oh = hat(k, hatBus, { decay: 0.17, release: 0.05, hp: 7200, volume: -16, pan: -0.1 });
   const ride = k.n("MetalSynth", {
     envelope: { attack: 0.001, decay: 0.35, release: 0.05 },
     harmonicity: 5.1, modulationIndex: 30, resonance: 5200, octaves: 1.4, volume: -34,
   });
   ride.connect(hatBus);
-  const clapBus = k.n("Gain", 1); clapBus.connect(out); clapBus.connect(send);
+  // clap + rim → dark lowpass → dry + reverb send
+  const clapBus = k.n("Gain", 1);
+  const clapTone = k.n("Filter", { type: "lowpass", frequency: 16000, rolloff: -12 });
+  clapBus.connect(clapTone); clapTone.connect(out); clapTone.connect(send);
   const clap = snare(k, clapBus, { decay: 0.13, bp: 1500, Q: 1.1, volume: -12, body: false });
   const rim = k.n("MembraneSynth", { pitchDecay: 0.008, octaves: 2, envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.02 }, volume: -22 });
-  const rimPan = k.n("Panner", 0.35); rim.chain(rimPan, out); rimPan.connect(send);
+  const rimPan = k.n("Panner", 0.35); rim.chain(rimPan, clapBus);
 
-  let acidSeq = null, acidBlock = -1, acidOn = false, dark = knobs.dark;
+  let acidSeq = null, acidBlock = -1, acidOn = false, sweep = 0.5, dark = knobs.dark;
+  // slow filter tweak: cutoff + env amount ride a 32-bar sine; dark shifts the whole range down
+  const applyAcid = () => {
+    acid.filterEnvelope.baseFrequency = xerp(lerp(320, 90, dark), lerp(1100, 300, dark), sweep);
+    acid.filterEnvelope.octaves = lerp(2.4, 1.8, dark) + lerp(1.8, 1.2, dark) * sweep;
+  };
   const applyDark = (d) => {
     dark = d;
-    kickDrive.distortion = lerp(0.12, 0.45, d);
+    kickLp.frequency.rampTo(xerp(12000, 2500, d), 0.2);
+    hatTone.frequency.rampTo(xerp(16000, 4200, d), 0.2);
+    clapTone.frequency.rampTo(xerp(16000, 3000, d), 0.2);
+    hatLevel.gain.rampTo(lerp(1, 0.55, d), 0.2);
+    ch.hp.frequency.rampTo(xerp(8800, 4500, d), 0.2);
+    oh.hp.frequency.rampTo(xerp(7200, 3800, d), 0.2);
+    oh.synth.envelope.decay = lerp(0.17, 0.32, d);
+    acidTone.frequency.rampTo(xerp(9000, 1800, d), 0.2);
     bass.filterEnvelope.baseFrequency = lerp(120, 60, d);
     send.gain.rampTo(lerp(0.18, 0.4, d), 0.3);
     acid.oscillator.type = d > 0.7 ? "square" : "sawtooth";
+    applyAcid();
   };
   applyDark(dark);
 
@@ -78,6 +101,21 @@ export function techno(Tone, out, knobs) {
 
   return {
     setKnob(name, v) { if (name === "dark") applyDark(v); },
+    // The groove: 16th closed hats every step (the pattern's hats become accents,
+    // its off-beat 2s open hats), a rolling bass on the three off-kick 16ths of
+    // each beat (pattern picks the pitch, low density thins the first), and the
+    // kick dropping out on the last beat of every 16 bars.
+    decorate(p, info) {
+      const fill = info.bar % 16 === 15;
+      const thin = info.knobs.density < 0.3;
+      return {
+        ...p,
+        kick: p.kick.map((v, i) => (fill && i >= 12 ? 0 : v)),
+        hat: p.hat.map((v) => (v === 2 ? 2 : 1)),
+        hatAcc: p.hat.map((v) => v === 1),
+        bass: p.bass.map((v, i) => (i % 4 === 0 || (thin && i % 4 === 1) ? 0 : v || 1)),
+      };
+    },
     trigger(step, t, p, info) {
       const { bar, dur } = info;
       const block = bar >> 4, inBlock = bar % 16;
@@ -88,21 +126,20 @@ export function techno(Tone, out, knobs) {
           acidSeq = makeAcid(r, info.knobs.density);
           acidOn = bar >= 8 && r() < 0.8;
         }
-        acidGain.gain.rampTo(acidOn && !(inBlock === 15) ? 1 : 0, dur * 4, t);
-        // slow filter tweak: cutoff + env amount ride a 32-bar sine
-        const sweep = 0.5 - 0.5 * Math.cos((2 * Math.PI * (bar % 32)) / 32);
-        acid.filterEnvelope.baseFrequency = xerp(lerp(320, 110, dark), lerp(1100, 380, dark), sweep);
-        acid.filterEnvelope.octaves = 2.4 + 1.8 * sweep;
+        acidGain.gain.rampTo(acidOn && inBlock !== 15 ? 1 : 0, dur * 4, t);
+        sweep = 0.5 - 0.5 * Math.cos((2 * Math.PI * (bar % 32)) / 32);
+        applyAcid();
       }
-      const fill = bar % 16 === 15 && step >= 12; // breath before each new block
-      if (p.kick[step] && !fill) { kk.hit(t, vel(p.kick[step])); duck(duckBus, t, 0.2, 0.06); duck(hatBus, t, 0.7, 0.05); }
-      if (p.bass[step] && !p.kick[step]) bass.triggerAttackRelease(mtof(ROOT + 12 + p.bass[step] - 1), dur * 0.7, t, 0.9);
-      if (p.hat[step] === 2) oh.hit(t, fill ? 1 : 0.85, 0.06);
-      else if (p.hat[step]) ch.hit(t, 0.45 + 0.4 * info.rnd());
+      const fill = inBlock === 15 && step >= 12; // breath before each new block
+      if (p.kick[step]) { kk.hit(t, vel(p.kick[step])); duck(duckBus, t, 0.2, 0.06); duck(hatBus, t, 0.7, 0.05); }
+      if (p.bass[step]) bass.triggerAttackRelease(mtof(ROOT + 12 + p.bass[step] - 1), dur * 0.7, t, step % 4 === 2 ? 0.95 : 0.78);
+      // closed hat on every 16th; the open hat / fill roll layers on top
+      if (p.hat[step]) ch.hit(t, (p.hatAcc?.[step] || p.hat[step] === 2 ? 0.72 : step % 2 ? 0.32 : 0.5) + 0.12 * info.rnd(), 0.02);
+      if (fill && step % 2) oh.hit(t, 0.4 + 0.15 * (step - 12), 0.03);
+      else if (p.hat[step] === 2) oh.hit(t, 0.85, 0.06);
       if (info.knobs.density > 0.55 && step % 4 === 2) ride.triggerAttackRelease(420, 0.1, t, 0.5);
       if ((step === 4 || step === 12) && (info.knobs.density > 0.3 || bar % 2)) clap.hit(t, 0.9);
       if (p.perc[step] && !p.kick[step]) rim.triggerAttackRelease(mtof(ROOT + 55 + (step % 3) * 7), 0.04, t, 0.6);
-      if (fill && step % 2) oh.hit(t, 0.4 + 0.15 * (step - 12), 0.03);
       const a = acidSeq && acidSeq[step];
       if (a && a.on && acidOn) {
         acid.portamento = a.slide ? dur * 0.6 : 0;
@@ -125,7 +162,7 @@ export function darkTechno(Tone, out, knobs) {
   const send = k.n("Gain", 0.3); send.connect(verb);
 
   const kickDrive = k.n("Distortion", { distortion: 0.5, oversample: "4x", wet: 0.6 });
-  const kickLp = k.n("Filter", { type: "lowpass", frequency: 6000 });
+  const kickLp = k.n("Filter", { type: "lowpass", frequency: 6000, rolloff: -12 });
   kickDrive.chain(kickLp, out);
   const kk = kick(k, kickDrive, { note: mtof(ROOT), decay: 0.6, pitchDecay: 0.06, octaves: 6, volume: -3, clickVolume: -20 });
 
@@ -153,15 +190,17 @@ export function darkTechno(Tone, out, knobs) {
   const indHp = k.n("Filter", { type: "highpass", frequency: 300 });
   const indPan = k.n("Panner", 0);
   const ind = k.n("NoiseSynth", { noise: { type: "brown" }, envelope: { attack: 0.001, decay: 0.11, sustain: 0, release: 0.04 }, volume: -10 });
-  ind.chain(crush, indHp, indPan, out);
+  const indLp = k.n("Filter", { type: "lowpass", frequency: 10000, rolloff: -12 });
+  ind.chain(crush, indHp, indLp, indPan, out);
   indPan.connect(send);
 
   const metalPan = k.n("Panner", 0.2);
+  const metalLp = k.n("Filter", { type: "lowpass", frequency: 14000, rolloff: -24 });
   const metal = k.n("MetalSynth", {
     envelope: { attack: 0.001, decay: 0.06, release: 0.02 },
     harmonicity: 5.1, modulationIndex: 40, resonance: 6200, octaves: 1.2, volume: -30,
   });
-  metal.chain(metalPan, out);
+  metal.chain(metalLp, metalPan, out);
 
   const droneLp = k.n("Filter", { type: "lowpass", frequency: 500, rolloff: -24, Q: 2 });
   const droneLfo = k.n("LFO", { frequency: 0.035, min: 220, max: 700 });
@@ -174,24 +213,29 @@ export function darkTechno(Tone, out, knobs) {
   droneLp.connect(send);
 
   const stabDelay = k.n("FeedbackDelay", { delayTime: "8n.", feedback: 0.5, wet: 0.5 });
+  const stabLp = k.n("Filter", { type: "lowpass", frequency: 6000, rolloff: -12 });
   const stab = k.n("FMSynth", {
     harmonicity: 1.41, modulationIndex: 9,
     envelope: { attack: 0.002, decay: 0.25, sustain: 0, release: 0.2 },
     modulationEnvelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.1 },
     volume: -25,
   });
-  stab.chain(stabDelay, duckBus);
+  stab.chain(stabLp, stabDelay, duckBus);
   stabDelay.connect(send);
 
   let dark = knobs.dark, stabStep = -1;
   const applyDark = (d) => {
     dark = d;
     rumbleLp2.frequency.rampTo(lerp(150, 85, d), 0.4);
-    rumbleDrive.distortion = lerp(0.5, 0.9, d);
-    kickDrive.distortion = lerp(0.35, 0.75, d);
+    rumbleDrive.distortion = lerp(0.5, 0.9, d); // sits behind a ≤150 Hz lowpass: weight, not fizz
+    kickLp.frequency.rampTo(xerp(9000, 1800, d), 0.2);
+    metalLp.frequency.rampTo(xerp(14000, 3500, d), 0.2);
+    indLp.frequency.rampTo(xerp(10000, 2200, d), 0.2);
+    stabLp.frequency.rampTo(xerp(6000, 1500, d), 0.2);
+    bass.filterEnvelope.baseFrequency = lerp(100, 55, d);
     send.gain.rampTo(lerp(0.2, 0.5, d), 0.4);
     droneLfo.min = lerp(260, 120, d); droneLfo.max = lerp(900, 380, d);
-    crush.setBits(Math.round(lerp(6, 3, d)));
+    crush.setBits(Math.round(lerp(7, 4, d)));
   };
   applyDark(dark);
 
@@ -200,6 +244,18 @@ export function darkTechno(Tone, out, knobs) {
 
   return {
     setKnob(name, v) { if (name === "dark") applyDark(v); },
+    // Rolling sub under the rumble: the three off-kick 16ths of every beat
+    // (pattern picks the pitch, low density thins the first); one bar of only
+    // rumble + hats every 32 bars.
+    decorate(p, info) {
+      const drop = info.bar % 32 === 31;
+      const thin = info.knobs.density < 0.3;
+      return {
+        ...p,
+        kick: drop ? p.kick.map(() => 0) : p.kick,
+        bass: p.bass.map((v, i) => (i % 4 === 0 || (thin && i % 4 === 1) ? 0 : v || 1)),
+      };
+    },
     trigger(step, t, p, info) {
       const { bar, dur } = info;
       if (step === 0 && bar % 8 === 0) {
@@ -208,13 +264,12 @@ export function darkTechno(Tone, out, knobs) {
         drone.triggerAttackRelease(c.map((s) => mtof(ROOT + 24 + s)), dur * 16 * 8 - 0.5, t, 0.8);
         stabStep = r() < 0.6 ? pickOf(r, [6, 10, 14]) : -1;
       }
-      const drop = bar % 32 === 31; // one bar of only rumble + hats every 32
-      if (p.kick[step] && !drop) {
+      if (p.kick[step]) {
         kk.hit(t, vel(p.kick[step]));
         duck(duckBus, t, 0.3, 0.07);
         duck(rumbleDuck, t, 0.02, 0.09);
       }
-      if (p.bass[step] && !p.kick[step]) bass.triggerAttackRelease(mtof(ROOT + 12 + p.bass[step] - 1), dur * 0.9, t, 0.85);
+      if (p.bass[step]) bass.triggerAttackRelease(mtof(ROOT + 12 + p.bass[step] - 1), dur * 0.8, t, step % 4 === 2 ? 0.9 : 0.75);
       if (p.hat[step]) metal.triggerAttackRelease(p.hat[step] === 2 ? 300 : 520, p.hat[step] === 2 ? 0.08 : 0.03, t, p.hat[step] === 2 ? 0.9 : 0.4 + 0.3 * info.rnd());
       if (p.perc[step]) { indPan.pan.setValueAtTime(info.rnd() * 1.2 - 0.6, t); ind.triggerAttackRelease(0.06, t, 0.6 + 0.4 * info.rnd()); }
       if (step === stabStep && bar % 4 === 3) stab.triggerAttackRelease(mtof(ROOT + 36 + (dark > 0.5 ? 1 : 0)), dur, t, 0.7);

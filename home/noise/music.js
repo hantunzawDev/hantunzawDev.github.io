@@ -16,8 +16,6 @@ import { lofi, synthwave, ambient, dnb, classical } from "./genres/chill.js";
 export const TONE_URL = "https://cdn.jsdelivr.net/npm/tone@15.1.22/build/Tone.js";
 export const TONE_SRI = "sha384-NWoslxaf/3dYwQk+uGziDYJFdsjBpVlU1WpFRexuDFcIk/5PJpCbpVXia2Uikeix";
 const XFADE = 0.8;           // seconds, genre switch
-const LOOKAHEAD = 0.1;       // Tone default while visible
-const LOOKAHEAD_HIDDEN = 0.3; // more headroom when the tab is backgrounded
 
 // Builder + output gain per genre (linear). Levels measured in the browser
 // (5 s peak on the mix bus at dark/density 0.5) so each genre peaks near
@@ -38,7 +36,7 @@ let attached = false;  // registered with the engine as the "music" source
 let running = false;   // sequencer running (engine started us)
 let cur = null;        // { id, out, inst, seed, pattern }
 let fading = [];       // outgoing genres during a crossfade
-let stepN = 0, drawPending = 0;
+let lastStep = -1, drawPending = 0; // absolute 16th index of the last tick fired
 const seeds = new Map(); // genre → seed, fixed for the session
 const knobs = { bpm: 130, dark: 0.5, density: 0.5 };
 const listeners = new Set();
@@ -96,13 +94,9 @@ async function load() {
     boundCtx = ctx;
     transport = T.getTransport();
     draw = T.getDraw();
-    setLookAhead();
-    document.addEventListener("visibilitychange", setLookAhead);
+    // lookAhead stays at Tone's fixed default: changing it at runtime moves the
+    // clock's "now" and can re-fire ticks. The worker clock keeps hidden tabs on time.
   }
-}
-
-function setLookAhead() {
-  if (T && boundCtx) T.getContext().lookAhead = document.hidden ? LOOKAHEAD_HIDDEN : LOOKAHEAD;
 }
 
 // ---------------------------------------------------------------- engine source
@@ -120,6 +114,7 @@ const source = {
     if (!transport) return;
     transport.stop();
     transport.cancel(0);
+    draw.cancel(0); drawPending = 0;
     retire(cur, 0.05); cur = null;
     for (const f of fading.splice(0)) retire(f, 0.05);
     music.step = 0; music.steps = EMPTY();
@@ -141,7 +136,7 @@ function startSeq() {
   transport.bpm.value = knobs.bpm;
   transport.swing = g.swing;
   transport.swingSubdivision = "16n";
-  stepN = 0;
+  lastStep = -1;
   cur = spawn(selected, 0.05);
   transport.scheduleRepeat(tick, "16n", 0);
   transport.start("+0.05");
@@ -156,18 +151,31 @@ function spawn(id, fadeIn) {
   stats.created++;
   out.connect(engine.mixBus);
   const inst = build(T, out, { ...knobs });
-  out.gain.rampTo(level, fadeIn);
-  const g = { id, out, inst, seed: seeds.get(id), pattern: null, until: Infinity };
-  g.pattern = makePattern(g, Math.floor(stepN / 16));
+  fade(out.gain, level, fadeIn);
+  const g = { id, out, inst, seed: seeds.get(id), pattern: null, patternBar: -1, until: Infinity };
   return g;
 }
 
-function retire(g, fade) {
+// Hold the gain where it is, then glide to `to`. Crossfade-length moves follow an
+// equal-power (sin/cos) shape so the switch doesn't dip; short ones are linear.
+function fade(param, to, dur) {
+  const now = boundCtx.currentTime;
+  param.cancelAndHoldAtTime(now);
+  const from = param.getValueAtTime(now);
+  if (dur < 0.2) { param.linearRampToValueAtTime(to, now + dur); return; }
+  const N = 16;
+  for (let i = 1; i <= N; i++) {
+    const x = (Math.PI / 2) * (i / N);
+    const v = to > from ? from + (to - from) * Math.sin(x) : to + (from - to) * Math.cos(x);
+    param.linearRampToValueAtTime(v, now + (dur * i) / N);
+  }
+}
+
+function retire(g, dur) {
   if (!g || g.gone) return;
   const now = boundCtx.currentTime;
-  g.until = Math.min(g.until, now + fade);
-  g.out.gain.cancelScheduledValues(now);
-  g.out.gain.rampTo(0, fade);
+  g.until = Math.min(g.until, now + dur);
+  fade(g.out.gain, 0, dur);
   clearTimeout(g.timer); // a second retire (rapid switching) only shortens the fade
   g.timer = setTimeout(() => {
     g.gone = true;
@@ -176,7 +184,7 @@ function retire(g, fade) {
     stats.disposed++;
     const i = fading.indexOf(g);
     if (i >= 0) fading.splice(i, 1);
-  }, (fade + T.getContext().lookAhead + 0.4) * 1000);
+  }, (dur + T.getContext().lookAhead + 0.4) * 1000);
 }
 
 function rngFor(g, bar) {
@@ -193,10 +201,19 @@ function makePattern(g, bar) {
   return (g.inst.decorate && g.inst.decorate(p, info(g, bar, 0))) || p;
 }
 
+// 16ths since the transport started, read from the transport itself so the bar
+// phase can never drift from Tone's clock. (+4 ticks absorbs float error; swing
+// delays an odd 16th by at most 2/3 of a 16th, so it never rounds into the next.)
+function stepAt(time) {
+  return Math.floor((transport.getTicksAtTime(time) + 4) / (transport.PPQ / 4));
+}
+
 function tick(time) {
-  const step = stepN % 16, bar = Math.floor(stepN / 16);
-  stepN++;
-  if (step === 0) for (const g of [cur, ...fading]) if (g) g.pattern = makePattern(g, bar);
+  const abs = stepAt(time);
+  if (abs <= lastStep) return; // never fire the same 16th twice
+  lastStep = abs;
+  const step = abs % 16, bar = Math.floor(abs / 16);
+  for (const g of [cur, ...fading]) if (g && g.patternBar !== bar) { g.pattern = makePattern(g, bar); g.patternBar = bar; }
   for (const g of fading) if (time < g.until) fire(g, step, time, bar);
   if (cur) fire(cur, step, time, bar);
   const pattern = cur?.pattern;
