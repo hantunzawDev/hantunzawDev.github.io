@@ -47,6 +47,7 @@ export const music = {
   steps: EMPTY(),
   step: 0,
   offline: false,
+  exclusive: null, // set by radio.js: called on play() so radio steps aside
   load,
   play,
   stop,
@@ -240,6 +241,7 @@ function fire(g, step, time, bar) {
 function play(genreId) {
   const g = byId[genreId];
   if (!g) return Promise.resolve();
+  music.exclusive?.();
   const changed = selected !== genreId;
   selected = genreId;
   if (changed) knobs.bpm = g.bpm[2];
