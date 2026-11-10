@@ -12,6 +12,7 @@ const P = {
   check:   '<path d="M2.5 6.2l2.4 2.4 4.6-5"/>',
   dot:     '<circle cx="6" cy="6" r="2" class="f"/>',
   link:    '<path d="M5 7l2-2"/><path d="M6.5 3.5l1-1a2.1 2.1 0 0 1 3 3l-1 1M5.5 8.5l-1 1a2.1 2.1 0 0 1-3-3l1-1"/>',
+  bento:   '<rect x="1.5" y="1.5" width="9" height="9"/><path d="M5.5 1.5v9M5.5 5h5M8 5v5.5"/>',
   layout:  '<rect x="1.5" y="1.5" width="9" height="9"/><path d="M1.5 4.5h9M5 4.5v6"/>',
   plus:    '<path d="M6 2v8M2 6h8"/>',
   up:      '<path d="M3 7.5l3-3 3 3"/>',

@@ -29,7 +29,7 @@ export const DEFAULT_LINKS = [
 
 const SETTINGS_DEFAULTS = {
   name: "Han", city: "Yangon", h24: true, theme: "lime", links: DEFAULT_LINKS,
-  snap: true, tile: false, mfact: 0.55, gap: 8,
+  snap: true, tile: true, tileLayout: "bento", mfact: 0.55, gap: 8,
   secs: true, crt: true, glow: true, motion: "auto",
   bootMode: "daily", bootSpeed: "normal", startMode: "last", startLayout: "",
   linksMenu: true, linksNewTab: false,

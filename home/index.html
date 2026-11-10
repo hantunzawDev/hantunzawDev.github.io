@@ -221,8 +221,13 @@
 
           <section class="config__pane" data-pane="windows" role="tabpanel" aria-label="Windows" hidden>
             <h2 class="config__h">[windows]</h2>
-            <label class="toggle"><input name="snap" type="checkbox"><span class="toggle__ui"></span><span>snap to edges &amp; corners</span></label>
+            <label class="toggle"><input name="snap" type="checkbox"><span class="toggle__ui"></span><span>snap to edges, corners &amp; other windows <span class="dim">hold ⌥ to place freely</span></span></label>
             <label class="toggle"><input name="tile" type="checkbox"><span class="toggle__ui"></span><span>tile windows <kbd>⌥T</kbd></span></label>
+            <div class="field"><span class="field__label" id="cfg-tl">tile layout</span><div class="seg" role="radiogroup" aria-labelledby="cfg-tl">
+                <label><input type="radio" name="tileLayout" value="bento"><span>bento</span></label>
+                <label><input type="radio" name="tileLayout" value="master"><span>master + stack</span></label>
+                <label id="cfg-tl-columns" hidden><input type="radio" name="tileLayout" value="columns"><span>preset columns</span></label>
+              </div></div>
             <div class="field"><label for="cfg-mfact">master</label><div class="range"><input id="cfg-mfact" name="mfact" type="range" min="0.2" max="0.8" step="0.05"><output for="cfg-mfact" data-out="mfact"></output></div></div>
             <div class="field"><label for="cfg-gap">gap</label><div class="range"><input id="cfg-gap" name="gap" type="range" min="0" max="24" step="2"><output for="cfg-gap" data-out="gap"></output></div></div>
 
