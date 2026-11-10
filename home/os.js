@@ -150,8 +150,12 @@ function masterGeom(apps, W, H) {
   const st = apps.slice(1), s = st.length;
   const [rx, ry, rw, rh] = wide ? [m, 0, 1 - m, 1] : [0, m, 1, 1 - m];
   let cols = 1, best = Infinity;
+  const needW = Math.max(...st.map(tileMinW)) + gapPx();
   for (let c = 1; c <= s; c++) {
-    const d = Math.abs(Math.log(((rw * W) / c) / ((rh * H) / Math.ceil(s / c)) / 1.4));
+    // shape first, but a stack too thin or too short for its windows costs far more
+    const cw = (rw * W) / c, ch = (rh * H) / Math.ceil(s / c);
+    const cramp = Math.max(0, needW / cw - 1) + Math.max(0, (TILE_MIN_H + gapPx()) / ch - 1);
+    const d = Math.abs(Math.log(cw / ch / 1.4)) + cramp * 12;
     if (d < best) { best = d; cols = c; }
   }
   let i = 0;
@@ -178,9 +182,15 @@ function bentoGeom(apps, W, H) {
   const cells = {}, seams = [];
   const items = apps.map((a, i) => ({ a, w: (BENTO_WEIGHT[a] || 1) * (i === 0 ? HERO : 1) }));
   // how far a box (px) holding m windows is from m comfortable ~1.45:1 tiles
-  const misfit = (pw, ph, m) => {
+  // a box whose tiles would drop below a window's minimum costs far more than a bad shape
+  const misfit = (pw, ph, its) => {
+    const m = its.length, minW = Math.max(...its.map((it) => tileMinW(it.a))) + gapPx();
     let best = Infinity;
-    for (let c = 1; c <= m; c++) best = Math.min(best, Math.abs(Math.log((pw / c) / (ph / Math.ceil(m / c)) / 1.45)));
+    for (let c = 1; c <= m; c++) {
+      const cw = pw / c, ch = ph / Math.ceil(m / c);
+      const cramp = Math.max(0, minW / cw - 1) + Math.max(0, (TILE_MIN_H + gapPx()) / ch - 1);
+      best = Math.min(best, Math.abs(Math.log(cw / ch / 1.45)) + cramp * 12);
+    }
     return best * m;
   };
   const go = (list, x, y, w, h) => {
@@ -193,12 +203,15 @@ function bentoGeom(apps, W, H) {
       const f = run / total;
       for (const ax of ["x", "y"]) {
         const [aw, ah, bw, bh] = ax === "x" ? [w * W * f, h * H, w * W * (1 - f), h * H] : [w * W, h * H * f, w * W, h * H * (1 - f)];
-        const score = misfit(aw, ah, j) + misfit(bw, bh, list.length - j) + (ax === (w * W >= h * H ? "x" : "y") ? 0 : 0.15);
+        const score = misfit(aw, ah, list.slice(0, j)) + misfit(bw, bh, list.slice(j)) + (ax === (w * W >= h * H ? "x" : "y") ? 0 : 0.15);
         if (score < best - 1e-9) { best = score; k = j; acc = run; axis = ax; }
       }
     }
     const key = `${list.map((it) => it.a).join(",")}/${k}${axis}`;
-    const r = clamp(splits[key] ?? acc / total, 0.12, 0.88);
+    const side = axis === "x" ? w * W : h * H;
+    const need = (its) => (axis === "x" ? Math.max(...its.map((it) => tileMinW(it.a))) : TILE_MIN_H) + gapPx();
+    const lo = Math.min(0.5, need(list.slice(0, k)) / side), hi = Math.max(0.5, 1 - need(list.slice(k)) / side);
+    const r = clamp(splits[key] ?? clamp(acc / total, lo, hi), 0.12, 0.88);
     seams.push({ key, axis, node: [x, y, w, h], ratio: r });
     const A = list.slice(0, k), B = list.slice(k);
     if (axis === "x") { go(A, x, y, w * r, h); go(B, x + w * r, y, w * (1 - r), h); }
@@ -207,21 +220,65 @@ function bentoGeom(apps, W, H) {
   if (items.length) go(items, 0, 0, 1, 1);
   return { cells, seams };
 }
+// narrowest / shortest a tile can be before its content stops fitting (px)
+const TILE_MIN_W = { noise: 330, wx: 245, term: 280, config: 300, game: 300 };
+const tileMinW = (a) => TILE_MIN_W[a] || 210;
+const TILE_MIN_H = 120;
+// share `total` px by weight, but give every item at least its minimum; returns weights (px)
+function fitShares(items, total, minOf) {
+  const sw = items.reduce((t, it) => t + it.w, 0);
+  let px = items.map((it) => (it.w / sw) * total);
+  for (let pass = 0; pass < 6; pass++) {
+    let deficit = 0;
+    px = px.map((v, i) => { const m = minOf(items[i]); if (v < m) { deficit += m - v; return m; } return v; });
+    if (deficit < 0.5) break;
+    const slack = px.map((v, i) => Math.max(0, v - minOf(items[i]))), ss = slack.reduce((a, b) => a + b, 0);
+    if (ss <= 0) break;
+    px = px.map((v, i) => v - (deficit * slack[i]) / ss);
+  }
+  return px;
+}
 // fixed columns: the preset's columns in order, rows stacked inside each. windows the
 // preset doesn't name stack into one extra column on the right. closed ones drop out.
-function columnsGeom(apps, W, H) {
+// on a screen too narrow for every column, the thinnest column stacks into its slimmer
+// neighbour until they fit, so a laptop gets fewer, taller columns instead of overlaps.
+function columnsGeom(apps, W, H, groups = tileGroups) {
   const cells = {}, seams = [], set = new Set(apps);
-  const cols = tileGroups.cols
+  let cols = groups.cols
     .map((c) => ({ w: +c.w || 1, rows: c.rows.filter(([a]) => set.has(a)).map(([a, wt]) => ({ a, w: +wt || 1 })) }))
     .filter((c) => c.rows.length);
   const named = new Set(cols.flatMap((c) => c.rows.map((r) => r.a)));
   const extra = apps.filter((a) => !named.has(a));
   if (extra.length) cols.push({ w: 0.22, rows: extra.map((a) => ({ a, w: 1 })) });
+  const G = gapPx();
+  const colMin = (c) => Math.max(...c.rows.map((r) => tileMinW(r.a))) + G;
+  const rowsFit = (c) => c.rows.length * (TILE_MIN_H + G) <= H;
+  while (cols.length > 1 && cols.reduce((t, c) => t + colMin(c), G) > W) {
+    // merge the thinnest column into whichever neighbour is thinner, if the stack still fits
+    const order = cols.map((c, i) => i).sort((i, j) => cols[i].w - cols[j].w);
+    let done = false;
+    for (const i of order) {
+      const nb = [i - 1, i + 1].filter((j) => j >= 0 && j < cols.length).sort((x, y) => cols[x].w - cols[y].w);
+      for (const j of nb) {
+        const [a, b] = i < j ? [cols[i], cols[j]] : [cols[j], cols[i]];
+        const merged = { w: a.w + b.w, rows: [...a.rows.map((r) => ({ ...r, w: r.w * a.w })), ...b.rows.map((r) => ({ ...r, w: r.w * b.w }))] };
+        if (!rowsFit(merged)) continue;
+        cols.splice(Math.min(i, j), 2, merged);
+        done = true;
+        break;
+      }
+      if (done) break;
+    }
+    if (!done) break;
+  }
+  // widths and heights by the preset's proportions, topped up to each tile's minimum
+  const cw = fitShares(cols, W, colMin);
+  cols = cols.map((c, i) => ({ ...c, w: cw[i], rows: fitShares(c.rows, H, () => TILE_MIN_H + G).map((h, k) => ({ ...c.rows[k], w: h })) }));
   // peel the first item off the rest, so every boundary is its own draggable seam
   const peel = (list, x, y, w, h, axis, id, leaf) => {
     if (list.length === 1) return leaf(list[0], x, y, w, h);
     const total = list.reduce((t, it) => t + it.w, 0);
-    const key = `c:${tileGroups.name}:${id(list)}`;
+    const key = `c:${groups.name}:${id(list)}`;
     const r = clamp(splits[key] ?? list[0].w / total, 0.08, 0.92);
     seams.push({ key, axis, node: [x, y, w, h], ratio: r });
     if (axis === "x") { leaf(list[0], x, y, w * r, h); peel(list.slice(1), x + w * r, y, w * (1 - r), h, axis, id, leaf); }
@@ -235,7 +292,22 @@ function columnsGeom(apps, W, H) {
 // unit-square cells for the tiled windows, plus the draggable seams between them
 function tileGeom(apps, W, H, kind = tileLayout()) {
   if (!apps.length) return { cells: {}, seams: [] };
-  return kind === "master" ? masterGeom(apps, W, H) : kind === "columns" ? columnsGeom(apps, W, H) : bentoGeom(apps, W, H);
+  if (kind === "master") return masterGeom(apps, W, H);
+  if (kind === "columns") return columnsGeom(apps, W, H);
+  const g = bentoGeom(apps, W, H);
+  // too many windows for this screen to bento without cramping one: try even columns and
+  // keep whichever gives its tightest tile more room
+  const room = (geo) => Math.min(...Object.entries(geo.cells).map(([a, [, , w, h]]) => Math.min((w * W) / tileMinW(a), (h * H) / TILE_MIN_H)));
+  const rb = room(g);
+  if (rb >= 1) return g;
+  // as many columns as fit across, then fewer if their rows would be too short
+  let k = clamp(Math.floor(W / (210 + gapPx())), 1, apps.length);
+  while (k > 1 && Math.ceil(apps.length / k) * (TILE_MIN_H + gapPx()) > H) k++;
+  k = Math.min(k, apps.length);
+  const per = Math.ceil(apps.length / k);
+  const cols = Array.from({ length: Math.ceil(apps.length / per) }, (_, i) => ({ w: 1, rows: apps.slice(i * per, i * per + per).map((a) => [a, BENTO_WEIGHT[a] || 1]) }));
+  const grid = columnsGeom(apps, W, H, { name: "grid", cols });
+  return room(grid) > rb ? grid : g;
 }
 const tileCells = (apps, W, H) => tileGeom(apps, W, H).cells;
 // inset a unit cell by the gap: a full gap at the desktop edge, half a gap on shared edges
@@ -403,11 +475,12 @@ function syncLayoutChip() {
   desktop.classList.toggle("is-tiled", !!settings.tile);
   desktop.dataset.tileLayout = tileLayout();
   const b = $("#layout-tile");
-  b.setAttribute("aria-pressed", String(!!settings.tile));
   const glyph = settings.tile ? (tileLayout() === "master" ? "tile" : "bento") : "float";
   if (b.dataset.glyph !== glyph) { $(".chip__glyph", b).innerHTML = icon(glyph); b.dataset.glyph = glyph; }
-  $(".chip__label", b).textContent = settings.tile ? layoutLabel() : "float";
-  b.title = settings.tile ? `tiling: ${layoutLabel()} · click for float (alt+t) · alt+space switches layout` : "toggle tiling (alt+t)";
+  const name = settings.tile ? layoutLabel() : "free";
+  $(".chip__label", b).textContent = name;
+  b.setAttribute("aria-label", `Window layout: ${name}`);
+  b.title = `window layout: ${name} · click to change (alt+space cycles)`;
 }
 // re-apply z-order after the layer rules change (floats above tiles only while tiling)
 function restack() {
@@ -647,6 +720,26 @@ function openApp(app, { focus = true } = {}) {
   if (small()) el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   return true;
 }
+// close every open window (or all but the front one); `reopen` brings the last batch back
+let lastClosed = [];
+function closeAll({ keep } = {}) {
+  const open = APPS.filter((a) => !win(a).hidden && a !== keep);
+  if (!open.length) { log("no windows to close"); return 0; }
+  closeZones();
+  lastClosed = open;
+  open.forEach((a) => closeApp(a));
+  log(`closed ${open.length} window${open.length === 1 ? "" : "s"} · type reopen to bring ${open.length === 1 ? "it" : "them"} back`, "ok");
+  return open.length;
+}
+function reopenClosed() {
+  if (!lastClosed.length) return log("nothing to reopen", "err");
+  const n = lastClosed.length;
+  // reversed: each reopened tile takes the hero slot, so the first one ends up first again
+  [...lastClosed].reverse().filter((a) => a !== "game").forEach((a) => openApp(a, { focus: false }));
+  lastClosed = [];
+  relayout(true);
+  log(`reopened ${n} window${n === 1 ? "" : "s"}`, "ok");
+}
 function closeApp(app) {
   app = appName(app);
   const el = win(app);
@@ -699,18 +792,41 @@ const APP_GROUPS = [
   ["media", ["viz", "noise"]],
 ];
 const kbd = (t) => h("kbd", { className: "menu__kbd", textContent: t });
-function menuItem(label, run, { role = "menuitem", checked, disabled, hint } = {}) {
-  const b = h("button", { type: "button", className: "menu__item", disabled: !!disabled });
+function menuItem(label, run, { role = "menuitem", checked, disabled, hint, desc } = {}) {
+  const b = h("button", { type: "button", className: `menu__item${desc ? " menu__item--desc" : ""}`, disabled: !!disabled });
   b.setAttribute("role", role);
   if (checked != null) b.setAttribute("aria-checked", String(!!checked));
   b.append(h("span", { className: "menu__check", innerHTML: checked ? icon(role === "menuitemradio" ? "dot" : "check") : "" }), h("span", { className: "menu__label", textContent: label }));
   if (hint) b.append(kbd(hint));
+  if (desc) b.append(h("span", { className: "menu__desc", textContent: desc }));
   b.addEventListener("click", () => { closeMenus(); run(); });
   return b;
 }
 const menuSep = () => { const s = h("div", { className: "menu__sep" }); s.setAttribute("role", "separator"); return s; };
 const menuHead = (t) => h("div", { className: "menu__head", textContent: t });
+// how windows get arranged, in plain words. the menubar chip and view menu share this list.
+function layoutItems() {
+  const wide = !small();
+  const on = (k) => settings.tile && tileLayout() === k;
+  const fixed = tileGroups?.name || (presets[DEFAULT_PRESET]?.groups?.name);
+  return [
+    menuHead("arrange windows"),
+    ...(fixed ? [menuItem(fixed, () => (on("columns") ? null : presets[fixed] ? (applyPreset(fixed), log(`layout: ${fixed}`, "ok")) : setTileLayout("columns")),
+      { role: "menuitemradio", checked: on("columns"), disabled: !wide, desc: "fixed columns you set up · drag the gaps to resize" })] : []),
+    menuItem("bento", () => setTileLayout("bento"), { role: "menuitemradio", checked: on("bento"), disabled: !wide, desc: "auto tiles · busy apps get the big ones" }),
+    menuItem("master + stack", () => setTileLayout("master"), { role: "menuitemradio", checked: on("master"), disabled: !wide, desc: "one big window, the rest stacked beside it" }),
+    menuItem("free", () => setTile(false), { role: "menuitemradio", checked: !settings.tile, disabled: !wide, hint: "⌥T", desc: "move and size windows yourself · snaps to edges" }),
+    menuSep(),
+    menuItem(settings.tile ? "even out tile sizes" : "tidy into a grid", arrangeAll, { disabled: !wide, hint: "⌥A" }),
+    menuItem("close all windows", () => closeAll(), { hint: "⌥⇧W" }),
+    menuSep(), menuHead("saved layouts"),
+    ...Object.keys(presets).sort().map((n) => menuItem(n, () => { applyPreset(n); log(`layout: ${n}`, "ok"); }, { disabled: !wide, hint: settings.startLayout === n ? "startup" : n === DEFAULT_PRESET ? "default" : "" })),
+    menuItem("save current…", () => { openConfig("windows"); $("#cfg-preset-name").focus(); }, { disabled: !wide }),
+    menuItem("reset to default", () => { resetLayout(); log("layout: reset.", "ok"); }, { disabled: !wide }),
+  ];
+}
 const MENUS = {
+  layout: layoutItems,
   sys: () => [
     menuItem("about hzOS", () => COMMANDS.neofetch()),
     menuItem("settings…", () => openConfig(), { hint: "⌥," }),
@@ -732,19 +848,15 @@ const MENUS = {
     return [
       menuHead("mode"),
       ...MODES.map((m, i) => menuItem(m, () => setMode(m), { role: "menuitemradio", checked: document.body.dataset.mode === m, hint: `⌥${i + 1}` })),
-      menuSep(), menuHead("windows"),
-      menuItem("tile windows", () => setTile(!settings.tile), { role: "menuitemcheckbox", checked: settings.tile, disabled: !wide, hint: "⌥T" }),
-      menuItem("bento", () => setTileLayout("bento"), { role: "menuitemradio", checked: settings.tile && tileLayout() === "bento", disabled: !wide, hint: settings.tile && tileLayout() !== "bento" ? "⌥␣" : "" }),
-      ...(tileGroups ? [menuItem(`${tileGroups.name} columns`, () => setTileLayout("columns"), { role: "menuitemradio", checked: settings.tile && tileLayout() === "columns", disabled: !wide })] : []),
-      menuItem("master + stack", () => setTileLayout("master"), { role: "menuitemradio", checked: settings.tile && tileLayout() === "master", disabled: !wide, hint: settings.tile && tileLayout() !== "master" ? "⌥␣" : "" }),
-      menuItem(settings.tile ? "rebalance tiles" : "arrange all (bento)", arrangeAll, { disabled: !wide, hint: "⌥A" }),
-      menuItem(cur ? `snap ${FILES[cur]}…` : "snap window…", () => openZones(cur, { focusFirst: true }), { disabled: !cur || !wide, hint: "⌥Z" }),
-      menuItem(cur ? `float ${FILES[cur]}` : "float window", () => toggleFloat(cur), { role: "menuitemcheckbox", checked: cur && isPinned(cur), disabled: !cur || !tiling(), hint: "⌥⇧␣" }),
-      menuItem("snap & magnetic edges", () => { settings.snap = !settings.snap; saveSettings(); }, { role: "menuitemcheckbox", checked: settings.snap, disabled: !wide }),
-      menuSep(), menuHead("layouts"),
-      ...Object.keys(presets).sort().map((n) => menuItem(n, () => { applyPreset(n); log(`layout: ${n}`, "ok"); }, { disabled: !wide, hint: settings.startLayout === n ? "startup" : "" })),
-      menuItem("save layout…", () => { openConfig("windows"); $("#cfg-preset-name").focus(); }, { disabled: !wide }),
-      menuItem("reset layout", () => { resetLayout(); log("layout: reset.", "ok"); }, { disabled: !wide }),
+      menuSep(),
+      // phones stack windows, so layout and placement options don't apply there
+      ...(wide ? layoutItems() : [menuItem("close all windows", () => closeAll())]),
+      ...(!wide ? [] : [menuSep(), menuHead(cur ? FILES[cur] : "this window")]),
+      ...(!wide ? [] : [
+        menuItem("place window…", () => openZones(cur, { focusFirst: true }), { disabled: !cur, hint: "⌥Z" }),
+        menuItem("keep floating above tiles", () => toggleFloat(cur), { role: "menuitemcheckbox", checked: cur && isPinned(cur), disabled: !cur || !tiling(), hint: "⌥⇧␣" }),
+        menuItem("snap & magnetic edges", () => { settings.snap = !settings.snap; saveSettings(); }, { role: "menuitemcheckbox", checked: settings.snap }),
+      ]),
     ];
   },
   links: () => [
@@ -775,7 +887,7 @@ function showMenu(m, { focusFirst = false } = {}) {
   openMenu = m;
   if (focusFirst) $(".menu__item:not(:disabled)", m)?.focus();
 }
-$$("#menus .menu").forEach((m) => {
+$$(".menu[data-menu]").forEach((m) => {
   const t = $(".menu__trigger", m);
   t.addEventListener("click", (e) => (openMenu === m ? closeMenus() : showMenu(m, { focusFirst: e.detail === 0 })));
   t.addEventListener("pointerenter", () => { if (openMenu && openMenu !== m) showMenu(m); }); // menubar scrubbing
@@ -783,7 +895,7 @@ $$("#menus .menu").forEach((m) => {
   m.addEventListener("keydown", (e) => {
     const items = $$(".menu__item:not(:disabled)", m);
     const i = items.indexOf(document.activeElement);
-    const menus = $$("#menus .menu");
+    const menus = $$(".menu[data-menu]").filter((x) => !x.hidden);
     const step = (d) => { const n = menus[(menus.indexOf(m) + d + menus.length) % menus.length]; showMenu(n, { focusFirst: true }); };
     if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeMenus({ refocus: true }); }
     else if (e.key === "ArrowDown" && i >= 0) { e.preventDefault(); items[(i + 1) % items.length].focus(); }
@@ -871,7 +983,7 @@ function openZones(app, { focusFirst = false } = {}) {
   if (zonePicker.app && zonePicker.app !== app) closeZones();
   const btn = $(".win__zones", win(app));
   zonePicker.app = app;
-  zonePicker.setAttribute("aria-label", `Snap layouts for ${FILES[app]}`);
+  zonePicker.setAttribute("aria-label", `Place ${FILES[app]}`);
   const foot = h("div", { className: "zones__foot" });
   const act = (label, run, hint) => {
     const b = h("button", { type: "button", className: "zones__act" }, h("span", { textContent: label }));
@@ -879,18 +991,20 @@ function openZones(app, { focusFirst = false } = {}) {
     b.addEventListener("click", () => { closeZones(); run(); });
     return b;
   };
-  foot.append(act("maximize", () => toggleMax(app)), act(tiling() ? "rebalance" : "arrange all", arrangeAll, "⌥A"));
-  const lay = h("div", { className: "zones__layouts" }, h("span", { className: "zones__head", textContent: "tile" }));
-  for (const k of [...TILE_LAYOUTS, ...(tileGroups ? ["columns"] : []), "float"]) {
+  foot.append(act(win(app).classList.contains("is-max") ? "restore size" : "maximize", () => toggleMax(app)));
+  if (tiling()) { const f = act(isPinned(app) ? "back into tiles" : "float above tiles", () => toggleFloat(app)); f.title = "alt+shift+space"; foot.append(f); }
+  else foot.append(act("tidy all", arrangeAll, "⌥A"));
+  const lay = h("div", { className: "zones__layouts" }, h("span", { className: "zones__head", textContent: "all windows" }));
+  for (const k of [...(tileGroups ? ["columns"] : []), ...TILE_LAYOUTS, "float"]) {
     const on = k === "float" ? !settings.tile : settings.tile && tileLayout() === k;
     const b = h("button", { type: "button", className: "zones__chip", innerHTML: icon(k === "master" ? "tile" : k === "float" ? "float" : "bento") });
-    b.append(h("span", { textContent: k === "columns" ? tileGroups.name : k }));
+    b.append(h("span", { textContent: k === "columns" ? tileGroups.name : k === "float" ? "free" : k }));
     b.setAttribute("aria-pressed", String(on));
     b.addEventListener("click", () => { closeZones(); k === "float" ? setTile(false) : setTileLayout(k); });
     lay.append(b);
   }
   zonePicker.replaceChildren(
-    h("div", { className: "zones__head", textContent: `snap ${FILES[app]}` }),
+    h("div", { className: "zones__head", textContent: `place ${FILES[app]}` }),
     h("div", { className: "zones__grid" }, ...ZONE_SETS.map((s) => zoneMini(s, app))),
     lay, foot,
   );
@@ -949,11 +1063,6 @@ function enableWindow(el) {
   grip.setAttribute("aria-hidden", "true");
   el.append(grip);
   el.tabIndex = -1; // alt+j/k can focus the window itself
-  const fb = h("button", { type: "button", className: "win__float" });
-  fb.dataset.float = "";
-  fb.addEventListener("click", () => toggleFloat(app));
-  $(".win__ctrl", el).prepend(fb);
-  syncFloatButton(app);
   const commit = (r, area) => {
     layout[app] = [(r.left - area.left) / area.width, (r.top - area.top) / area.height, r.width / area.width, r.height / area.height];
     saveLayout();
@@ -979,10 +1088,10 @@ function enableWindow(el) {
   }, (r, area) => { el.classList.remove("is-resizing"); targets = null; hideGuides(); delete snapPrev[app]; commit(r, area); });
   // snap-layout picker: hover (or click) the zones button for a menu of places to put this window
   const zb = h("button", { type: "button", className: "win__zones", innerHTML: icon("layout") });
-  zb.setAttribute("aria-label", `Snap layouts for ${FILES[app]}`);
+  zb.setAttribute("aria-label", `Place ${FILES[app]}`);
   zb.setAttribute("aria-haspopup", "dialog");
   zb.setAttribute("aria-expanded", "false");
-  zb.title = "snap layouts (alt+z)";
+  zb.title = "place this window (alt+z)";
   zb.addEventListener("click", (e) => (zonePicker.app === app ? closeZones() : openZones(app, { focusFirst: e.detail === 0 })));
   zb.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") { clearTimeout(zb._t); zb._t = setTimeout(() => openZones(app), 420); } });
   zb.addEventListener("pointerleave", () => clearTimeout(zb._t));
@@ -1010,11 +1119,11 @@ function resetLayout() {
   store.del("tile.order");
   relayout(true);
 }
-$("#layout-tile").addEventListener("click", () => setTile(!settings.tile));
 // tiling keys (alt / option, matched by physical key so macOS option-characters don't get in the way)
 addEventListener("keydown", (e) => {
   if (!e.altKey || e.ctrlKey || e.metaKey || small() || document.body.dataset.mode !== "desktop") return;
   if (document.activeElement?.tagName === "CANVAS") return;
+  if (e.code === "KeyW" && e.shiftKey) { e.preventDefault(); closeAll(); return; }
   if (e.code === "Space" && !e.shiftKey) { e.preventDefault(); cycleTileLayout(); return; }
   if (e.code === "Space" && e.shiftKey) {
     if (!tiling()) return;
@@ -1901,7 +2010,7 @@ const HELP = {
   audio:  "viz [mic|sys|noise|off] · viz orb|terrain|pulsar",
   noise:  "noise (play/stop, alt+n) · noise <genre|preset> · noise <layer> [0-100] · noise off <layer> · noise bpm|dark|density|vol <n> · noise save <name> · noise list · radio [station|off] · sleep 30m|off",
   bg:     "bg [off|audio|drift|aurora|grid|scan|glow] [focus|zen] · bg orb|terrain|pulsar · bg mic|sys|noise|off · [ ] cycle on stage",
-  system: "open|close|max <app> · ls · layout ls|save|load|rm|startup <name> · layout reset · config [general|look|windows|startup|links|quotes|data] · tile [on|off|bento|master|hero|rebalance] · arrange · zones [app] · float [app] [on|off] · snap on|off · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
+  system: "open|close|max <app> · ls · layout ls|save|load|rm|startup <name> · layout reset · config [general|look|windows|startup|links|quotes|data] · close all|others · reopen · tile [on|off|bento|master|hero|rebalance] · arrange · zones [app] · float [app] [on|off] · snap on|off · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
 };
 const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : "#"; } catch { return "#"; } }; // feed/calendar URLs are third-party data
 const go = (url) => { location.href = safeUrl(url); };
@@ -2116,7 +2225,13 @@ const COMMANDS = {
 
   // system
   open: (a) => (openApp(a) ? log(`open ${a}`, "ok") : log(`no app "${a}". try: ls`, "err")),
-  close: (a) => (closeApp(a) ? log(`close ${a}`) : log(`no app "${a}"`, "err")),
+  close: (a = "") => {
+    if (a === "all" || a === "*") return closeAll();
+    if (a === "others" || a === "other") return closeAll({ keep: $(".win.is-front:not([hidden])")?.dataset.app });
+    return closeApp(a) ? log(`close ${a}`) : log(`no app "${a}" · close <app>|all|others`, "err");
+  },
+  closeall: () => closeAll(),
+  reopen: () => reopenClosed(),
   max: (a) => (toggleMax(a || $(".win.is-front")?.dataset.app) ? log(`max ${a || "front window"}`) : log("usage: max <app>", "err")),
   ls: () => log(APPS.map((a) => FILES[a] + (win(a).hidden ? "" : "*")).join("  ") + "\n(* = open)"),
   layout: (a = "") => {
@@ -2278,7 +2393,7 @@ input.addEventListener("keydown", (e) => {
     const [c, ...r] = input.value.split(" ");
     let pool, prefix = "";
     if (r.length === 0) pool = [...Object.keys(COMMANDS), ...links().map((l) => l.name)];
-    else if (["open", "close", "max", "float"].includes(c)) { pool = APPS; prefix = c + " "; }
+    else if (["open", "close", "max", "float"].includes(c)) { pool = c === "close" ? ["all", "others", ...APPS] : APPS; prefix = c + " "; }
     else if (c === "theme") { pool = THEMES; prefix = c + " "; }
     else if (c === "mode") { pool = MODES; prefix = c + " "; }
     else if (c === "tile" || c === "snap") { pool = c === "tile" ? ["on", "off", ...TILE_LAYOUTS, "hero", "rebalance"] : ["on", "off"]; prefix = c + " "; }
@@ -2448,7 +2563,9 @@ async function start() {
   if (!win("noise").hidden) mountNoise();
   noiseRestore();
   if (!win("game").hidden) closeApp("game"); // games don't resume across reloads
-  addEventListener("resize", () => { closeZones(); syncOrientation(); syncTermDock(); relayout(); });
+  const onResize = () => { closeZones(); syncOrientation(); syncTermDock(); relayout(); };
+  addEventListener("resize", onResize);
+  matchMedia("(max-width: 900px)").addEventListener("change", onResize); // stacked <-> desktop, even without a resize event
   renderDock();
   front("clock");
   net();

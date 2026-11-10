@@ -140,6 +140,16 @@ html.handoff .boot::before {
 .menu__check { display: grid; place-items: center; color: var(--lime); }
 .menu__item:is(:hover, :focus-visible):not(:disabled) .menu__check, .menu__item:is(:hover, :focus-visible):not(:disabled) .menu__kbd { color: inherit; }
 .menu__kbd { font-family: inherit; font-size: 10px; color: var(--dim); padding-left: 16px; }
+/* items with a one-line explanation under the label */
+.menu__item--desc { padding-top: 6px; padding-bottom: 6px; }
+.menu__desc { grid-column: 2 / -1; min-width: 0; font-size: 10.5px; color: var(--dim); line-height: 1.35; white-space: normal; text-wrap: pretty; }
+.menu__item:is(:hover, :focus-visible):not(:disabled) .menu__desc { color: inherit; opacity: .8; }
+/* a menu anchored at the right end of the menubar opens leftward */
+.menu--end .menu__panel { left: auto; right: 0; transform-origin: top right; width: 290px; }
+/* the layout chip is a menu trigger: keep the chip look, add a caret */
+.chip--layout.menu__trigger { height: 22px; padding: 0 6px 0 8px; gap: 6px; color: var(--lime); border-color: var(--line-hi); }
+.chip--layout .chip__caret .ico { width: 9px; height: 9px; opacity: .7; }
+.menu.is-open .chip--layout { background: var(--lime); color: var(--lime-ink); }
 
 /* taskbar: open windows only, separated from the menus by a rule */
 .menubar__apps {
@@ -197,7 +207,7 @@ body:not([data-mode="desktop"]) .modes { border-color: var(--lime); box-shadow: 
 .chip--net.off::before { background: var(--red); box-shadow: none; }
 .menubar__clock { display: inline-flex; gap: 10px; padding: 0 4px 0 10px; margin-left: 4px; border-left: 1px solid var(--line); }
 #st-time { color: var(--text); }
-body:not([data-mode="desktop"]) #layout-tile { visibility: hidden; }
+body:not([data-mode="desktop"]) .menu[data-menu="layout"] { visibility: hidden; }
 .desktop.is-flowing .win:not(.is-dragging) { transition: left .32s cubic-bezier(.2,.8,.2,1), top .32s cubic-bezier(.2,.8,.2,1), width .32s cubic-bezier(.2,.8,.2,1), height .32s cubic-bezier(.2,.8,.2,1); }
 
 /* ---------- desktop + windows ---------- */
@@ -230,10 +240,6 @@ body:not([data-mode="desktop"]) #layout-tile { visibility: hidden; }
 .win__ctrl button:active { transform: translate(1px, 1px); }
 @media (hover: hover) { .win__ctrl button[data-close]:hover { background: var(--red); border-color: var(--red); color: var(--lime-ink); } }
 /* float pin: only meaningful while tiling */
-.win__ctrl .win__float { display: none; }
-.desktop.is-tiled .win__ctrl .win__float { display: grid; }
-.win__float[aria-pressed="true"] { border-style: dashed; }
-@media (hover: hover) { .win__ctrl .win__float:hover { color: var(--lime); background: var(--lime-ink); border-color: var(--lime-ink); } }
 /* floating windows over the tile grid: lifted, dashed frame so the layer reads at a glance */
 .desktop.is-tiled .win.is-float { box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.6); outline: 1px dashed color-mix(in srgb, var(--lime) 35%, transparent); outline-offset: 3px; }
 .win__body { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; scrollbar-width: thin; scrollbar-color: var(--line-hi) transparent; }
@@ -244,7 +250,7 @@ body:not([data-mode="desktop"]) #layout-tile { visibility: hidden; }
 .win.is-front .win__grip { background: linear-gradient(135deg, transparent 0 50%, var(--lime) 50% 58%, transparent 58% 70%, var(--lime) 70% 78%, transparent 78%); }
 .win.is-max { left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; box-shadow: none; }
 .win.is-max .win__grip, .win.is-tiled .win__grip { display: none; }
-.win.is-tiled { box-shadow: none; }
+.win.is-tiled { box-shadow: none; min-width: 0; min-height: 0; } /* a tile is exactly its cell: tiles never overlap, content scrolls */
 .win:focus { outline: none; }
 /* drop preview while dragging: where the window will land (snap zone or tile slot) */
 .snap-ghost {
@@ -328,9 +334,10 @@ body:not([data-mode="desktop"]) #layout-tile { visibility: hidden; }
 /* snap layouts button + picker */
 @media (hover: hover) { .win__ctrl .win__zones:hover, .win__ctrl .win__zones[aria-expanded="true"] { color: var(--lime); background: var(--lime-ink); border-color: var(--lime-ink); } }
 .zones {
-  position: fixed; z-index: 20000; width: 300px; padding: 10px;
+  position: fixed; z-index: 20000; width: min(320px, calc(100vw - 16px)); padding: 10px;
+  max-height: calc(100dvh - 16px); overflow-y: auto; overscroll-behavior: contain;
   background: var(--win); border: 1px solid var(--line-hi); box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.55);
-  display: grid; gap: 10px; transform-origin: top right;
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; transform-origin: top right;
 }
 .zones[hidden] { display: none; }
 .zones.is-on { animation: zones-in .16s var(--ease-out, ease-out); }
@@ -359,16 +366,23 @@ body.motion-reduced .snap-ghost { transition: opacity .12s ease-out; }
 .zones__zone:focus-visible::before { background: var(--lime); border-color: var(--lime); box-shadow: var(--glow); }
 @media (hover: hover) { .zones__zone:hover::before { background: var(--lime); border-color: var(--lime); box-shadow: var(--glow); } }
 .zones__zone:focus-visible { outline: none; }
-.zones__name { font-size: 10px; color: var(--muted); text-align: center; }
-.zones__layouts { display: flex; align-items: center; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
-.zones__layouts .zones__head { margin-right: auto; }
+.zones__name { font-size: 10px; color: var(--muted); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zones__set { min-width: 0; }
+/* layout switch: label on its own line, four equal buttons below, never wider than the panel */
+.zones__layouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.zones__layouts .zones__head { grid-column: 1 / -1; }
+.zones__layouts > .zones__chip:last-child:nth-child(even) { grid-column: 1 / -1; } /* odd count: last one spans */
 .zones__chip, .zones__act {
   display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; font: inherit; font-size: 11px; cursor: pointer;
   background: transparent; color: var(--text); border: 1px solid var(--line-hi);
 }
-.zones__chip .ico { width: 10px; height: 10px; }
+.zones__chip { justify-content: center; min-width: 0; padding: 0 4px; }
+.zones__chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zones__chip .ico { width: 10px; height: 10px; flex: none; }
 .zones__chip[aria-pressed="true"] { background: var(--lime); color: var(--lime-ink); border-color: var(--lime); }
-.zones__foot { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.zones__foot { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 6px; }
+.zones__act { min-width: 0; }
+.zones__foot .zones__act:only-child { grid-column: 1 / -1; }
 .zones__act { justify-content: space-between; white-space: nowrap; }
 .zones__act .menu__kbd { padding-left: 8px; }
 @media (hover: hover) { .zones__chip:not([aria-pressed="true"]):hover, .zones__act:hover { border-color: var(--lime); color: var(--lime); } }
@@ -401,6 +415,14 @@ body.motion-reduced .snap-ghost { transition: opacity .12s ease-out; }
 .wx__now { display: flex; align-items: flex-end; gap: 12px; margin: 8px 0 6px; }
 .wx__temp { font-family: var(--f-dot); font-weight: 900; font-size: 56px; line-height: 0.9; color: var(--text); }
 .wx__desc { color: var(--muted); padding-bottom: 6px; }
+/* narrow tiles: the description drops under a smaller temperature instead of pushing past the edge */
+.win__body.wx { container-type: inline-size; }
+@container (max-width: 250px) {
+  .wx__now { flex-wrap: wrap; align-items: flex-start; gap: 2px 10px; }
+  .wx__temp { font-size: 44px; }
+  .wx__desc { padding-bottom: 0; }
+  .wx__rows { font-size: 11px; }
+}
 .wx__rows { color: var(--muted); line-height: 1.7; }
 .wx__rows b { color: var(--lime); font-weight: 400; letter-spacing: 0.06em; }
 .wx__guess { margin-top: 10px; color: var(--amber); }
@@ -765,6 +787,17 @@ body.term-docked footer.cmd { display: none; }
 .bgbar__extra[hidden] { display: none; }
 .noscript { position: fixed; inset: 40% 0 auto; text-align: center; color: var(--lime); z-index: 70; }
 
+/* ---------- mid-width desktops: the menubar sheds labels before it runs out of room ---------- */
+@media (max-width: 1280px) {
+  .modes button { padding: 0 8px; font-size: 0; gap: 0; }
+  .modes button .ico { width: 13px; height: 13px; }
+  #st-date { display: none; }
+}
+@media (max-width: 1080px) {
+  #st-wx { display: none; }
+  .menubar__apps .task { padding-inline: 6px; }
+}
+
 /* ---------- small screens: stacked, no dragging ---------- */
 @media (max-width: 900px) {
   body { overflow: auto; }
@@ -774,9 +807,12 @@ body.term-docked footer.cmd { display: none; }
   .win[data-app="feed"], .win[data-app="cal"] { max-height: 520px; }
   .win[data-app="game"] .game__board { height: min(86vw, 420px); flex: none; }
   .win[data-app="viz"] .viz__board { height: min(70vw, 360px); flex: none; }
-  .menubar__apps { visibility: hidden; }
-  #layout-tile, .desktop.is-tiled .win__ctrl .win__float { display: none; }
-  .menubar__apps { flex: 1; }
+  .menubar__apps { visibility: hidden; flex: 1; min-width: 0; }
+  .menu[data-menu="layout"] { display: none; }
+  .menubar { gap: 8px; }
+  .menu__trigger { padding: 0 7px; }
+  .menu__trigger--logo { padding: 0 8px 0 6px; }
+  .modes button { min-width: 28px; justify-content: center; }
   .modes button { padding: 0 8px; font-size: 0; gap: 0; }
   .modes button .ico { width: 13px; height: 13px; }
   .snap-ghost { display: none; }
@@ -821,7 +857,7 @@ body[data-theme="paper"] .win__body.noise { --nz-glow-c: transparent; --nz-hot-g
 .nz-ring__num { font-family: var(--f-dot); font-weight: 900; font-size: 19px; line-height: 1; color: var(--muted); font-variant-numeric: tabular-nums; text-transform: uppercase; }
 .nz-ring__cap { margin-top: 3px; font-size: 7.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
 .noise[data-state="playing"] .nz-ring__num, .noise[data-state="fading"] .nz-ring__num { color: var(--lime); text-shadow: var(--glow); }
-.nz-readout { min-width: 0; display: grid; gap: 3px; }
+.nz-readout { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; }
 .nz-kicker { font-size: 9.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
 .nz-title {
   font-family: var(--f-dot); font-weight: 900; font-size: 22px; line-height: 1.08; letter-spacing: .02em;
@@ -1161,3 +1197,21 @@ body[data-theme="paper"] .nz-mini {
 
 /* phones: the links menu would push the mode switch off the bar; links still open from the command line */
 @media (max-width: 520px) { .menu[data-menu="links"] { display: none; } }
+
+/* ---------- phones: the menubar keeps menus + modes, drops the rest (after the 900px block so it wins) ---------- */
+@media (max-width: 420px) {
+  .menu[data-menu="links"] { display: none; }
+  .menubar__clock { padding-left: 6px; margin-left: 0; }
+  .menubar__apps { display: none; }
+  .modes { margin-left: auto; }
+  .modes button { padding: 0 6px; min-width: 26px; }
+  /* menus open as a full-width sheet under the bar instead of hanging off the right edge */
+  .menu { position: static; }
+  .menu__panel { position: fixed; top: calc(var(--menubar) + 1px); left: 8px; right: 8px; min-width: 0; max-height: calc(100dvh - var(--menubar) - 16px); overflow-y: auto; overscroll-behavior: contain; }
+}
+@media (max-width: 379px) {
+  .menubar__clock { display: none; } /* the clock window still shows the time */
+  .menubar { gap: 6px; padding-inline: 4px; }
+  .menu__trigger { padding: 0 5px; }
+  .menu__trigger--logo { padding: 0 6px 0 4px; }
+}

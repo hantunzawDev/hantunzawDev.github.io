@@ -50,7 +50,7 @@
     </div>
     <div class="menubar__status">
       <span id="st-timer" class="chip chip--amber" hidden></span>
-      <button type="button" class="chip chip--btn" id="layout-tile" title="toggle tiling (alt+t)" aria-pressed="false"><span aria-hidden="true" class="chip__glyph ico-slot" data-icon="float"></span><span class="chip__label">float</span></button>
+      <div class="menu menu--end" data-menu="layout"><button type="button" class="chip chip--btn menu__trigger chip--layout" id="layout-tile" aria-haspopup="menu" aria-expanded="false"><span aria-hidden="true" class="chip__glyph ico-slot" data-icon="float"></span><span class="chip__label">free</span><span aria-hidden="true" class="chip__caret ico-slot" data-icon="down"></span></button><div class="menu__panel" role="menu" aria-label="Window layout"></div></div>
       <span id="st-wx" class="chip hide-sm">wx:--</span>
       <span id="st-net" class="chip chip--net hide-sm" title="online"><span class="sr-only">online</span></span>
       <span class="menubar__clock"><span id="st-date" class="hide-sm">--</span><time id="st-time">--:--:--</time></span>
