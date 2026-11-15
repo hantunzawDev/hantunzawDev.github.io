@@ -31,9 +31,11 @@ const SETTINGS_DEFAULTS = {
   name: "Han", city: "Yangon", h24: true, theme: "lime", links: DEFAULT_LINKS,
   snap: true, tile: true, tileLayout: "bento", mfact: 0.55, gap: 8,
   secs: true, crt: true, glow: true, motion: "auto",
-  bootMode: "daily", bootSpeed: "normal", startMode: "last", startLayout: "",
+  bootMode: "daily", bootSpeed: "normal", startMode: "home", startLayout: "",
   linksMenu: true, linksNewTab: false,
   qRotation: "hourly", qMatch: true, qp_dev: true, qp_stoic: true, qp_motivation: true, qp_rest: true, qCustom: "",
+  homeArt: "marine-drive-necklace", homeLook: "original", homeMono: false, homeFit: "cover", homeDim: 60, homeSpeed: 1,
+  homeText: "", homeFps: 6, homeFx: "glint",
 };
 export const settings = { ...SETTINGS_DEFAULTS };
 // copy saved fields one by one: skip prototype keys and any field whose type no longer matches

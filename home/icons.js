@@ -5,6 +5,7 @@ const P = {
   close:   '<path d="M3 3l6 6M9 3L3 9"/>',
   float:   '<rect x="1.5" y="1.5" width="9" height="9"/><rect x="5.5" y="5.5" width="5" height="5" class="f"/>',
   tile:    '<rect x="1.5" y="1.5" width="9" height="9"/><path d="M6 1.5v9M6 6h4.5"/>',
+  home:    '<path d="M1.5 6.2L6 2l4.5 4.2"/><path d="M3 5.5v5h6v-5"/>',
   desktop: '<rect x="1.5" y="1.5" width="4" height="4"/><rect x="6.5" y="1.5" width="4" height="4"/><rect x="1.5" y="6.5" width="4" height="4"/><rect x="6.5" y="6.5" width="4" height="4"/>',
   focus:   '<circle cx="6" cy="6" r="4.5"/><circle cx="6" cy="6" r="1.5" class="f"/>',
   zen:     '<path d="M8.8 2.2A4.5 4.5 0 1 0 9.8 8.6 3.6 3.6 0 0 1 8.8 2.2z"/>',

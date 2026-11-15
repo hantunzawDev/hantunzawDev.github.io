@@ -6,7 +6,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>hzOS</title>
-  <meta name="description" content="hzOS: Han's browser home. Clock, weather, todo, notes, focus timer, feeds, an audio visualizer and games, run like a tiny operating system.">
+  <meta name="description" content="hzOS: Han's browser home. Clock, weather, todo, notes, focus timer, feeds, noise and games, run like a tiny operating system.">
   <meta name="theme-color" content="#0a0c08">
   <meta name="robots" content="noindex, nofollow, noai, noimageai">
   <link rel="icon" href="../assets/favicon.ico">
@@ -44,6 +44,7 @@
     </nav>
     <nav class="menubar__apps" id="dock" aria-label="Open windows"></nav>
     <div class="modes" role="radiogroup" aria-label="View mode">
+      <button type="button" role="radio" data-mode="home" aria-checked="false" title="home (alt+0)"><span class="ico-slot" data-icon="home"></span>home</button>
       <button type="button" role="radio" data-mode="desktop" aria-checked="true" title="desktop (alt+1)"><span class="ico-slot" data-icon="desktop"></span>desktop</button>
       <button type="button" role="radio" data-mode="focus" aria-checked="false" title="focus (alt+2)"><span class="ico-slot" data-icon="focus"></span>focus</button>
       <button type="button" role="radio" data-mode="zen" aria-checked="false" title="zen (alt+3)"><span class="ico-slot" data-icon="zen"></span>zen</button>
@@ -176,6 +177,7 @@
           <button type="button" role="tab" data-pane="general" aria-selected="true">general</button>
           <button type="button" role="tab" data-pane="look" aria-selected="false" tabindex="-1">look</button>
           <button type="button" role="tab" data-pane="windows" aria-selected="false" tabindex="-1">windows</button>
+          <button type="button" role="tab" data-pane="home" aria-selected="false" tabindex="-1">home</button>
           <button type="button" role="tab" data-pane="startup" aria-selected="false" tabindex="-1">startup</button>
           <button type="button" role="tab" data-pane="links" aria-selected="false" tabindex="-1">links</button>
           <button type="button" role="tab" data-pane="quotes" aria-selected="false" tabindex="-1">quotes</button>
@@ -244,6 +246,80 @@
             <button type="button" class="key key--ghost" id="cfg-layout-reset">reset to default layout</button>
           </section>
 
+          <section class="config__pane" data-pane="home" role="tabpanel" aria-label="Home screen" hidden>
+            <h2 class="config__h">[home]</h2>
+            <div class="artpick">
+              <div class="artpick__view">
+                <div class="artpick__stage" id="art-preview" aria-hidden="true"></div>
+                <p class="artpick__now"><span id="art-now"></span><span class="dim" id="art-now-meta"></span></p>
+              </div>
+              <div class="artpick__browse">
+                <div class="artpick__bar">
+                  <label class="sr-only" for="art-q">Search art</label>
+                  <input id="art-q" type="text" autocomplete="off" spellcheck="false" placeholder="search pieces">
+                  <label class="sr-only" for="art-cat">Category</label>
+                  <select id="art-cat">
+                    <option value="featured">calm picks</option>
+                    <option value="">everything</option>
+                    <option value="scenes">painted scenes</option>
+                  </select>
+                  <button type="button" class="key" id="art-shuffle" title="random piece from this list">shuffle</button>
+                </div>
+                <ul class="artpick__list" id="art-list" aria-label="Art pieces"></ul>
+                <p class="field__hint field__hint--block" id="art-count" aria-live="polite">loading…</p>
+              </div>
+            </div>
+            <div class="field"><label for="cfg-homelook">drawn in</label>
+              <select id="cfg-homelook" name="homeLook">
+                <option value="original">original</option>
+                <option value="dots">halftone dots</option>
+                <option value="ascii">ascii</option>
+                <option value="dense">dense ascii</option>
+                <option value="numbers">numbers</option>
+                <option value="binary">binary</option>
+                <option value="letters">letters</option>
+                <option value="blocks">blocks</option>
+                <option value="squares">squares</option>
+                <option value="lines">lines</option>
+                <option value="dither">dither</option>
+              </select>
+            </div>
+            <div class="field"><span class="field__label">colour</span>
+              <div class="seg" role="radiogroup" aria-label="Art colour">
+                <label><input type="radio" name="homeMono" value="false"><span>its own</span></label>
+                <label><input type="radio" name="homeMono" value="true"><span>theme</span></label>
+              </div>
+            </div>
+            <div class="field"><span class="field__label">size</span>
+              <div class="seg" role="radiogroup" aria-label="Art size">
+                <label><input type="radio" name="homeFit" value="cover"><span>fill screen</span></label>
+                <label><input type="radio" name="homeFit" value="fit"><span>whole piece</span></label>
+              </div>
+            </div>
+            <div class="field"><label for="cfg-homedim">brightness</label><div class="range"><input id="cfg-homedim" name="homeDim" type="range" min="15" max="100" step="5"><output for="cfg-homedim" data-out="homeDim"></output></div></div>
+            <div class="field"><label for="cfg-homespeed">speed</label><div class="range"><input id="cfg-homespeed" name="homeSpeed" type="range" min="0.25" max="2" step="0.25"><output for="cfg-homespeed" data-out="homeSpeed"></output></div></div>
+
+            <h2 class="config__h config__h--sub">[my art]</h2>
+            <div class="field field--stack"><label for="cfg-hometext">text art <span class="dim">paste any ascii. for an animation, put a line of --- between frames</span></label>
+              <textarea id="cfg-hometext" name="homeText" class="artpick__text" rows="7" spellcheck="false" wrap="off" placeholder="  /\_/\&#10; ( o.o )&#10;  > ^ <&#10;---&#10;  /\_/\&#10; ( -.- )&#10;  > ^ <"></textarea>
+            </div>
+            <div class="field"><span class="field__label">motion</span>
+              <div class="seg" role="radiogroup" aria-label="Text art motion">
+                <label><input type="radio" name="homeFx" value="glint"><span>glint</span></label>
+                <label><input type="radio" name="homeFx" value="wave"><span>wave</span></label>
+                <label><input type="radio" name="homeFx" value="none"><span>none</span></label>
+              </div>
+            </div>
+            <div class="field"><label for="cfg-homefps">frame rate</label><div class="range"><input id="cfg-homefps" name="homeFps" type="range" min="1" max="24" step="1"><output for="cfg-homefps" data-out="homeFps"></output></div></div>
+            <div class="chips">
+              <button type="button" class="key" id="art-use-text" aria-pressed="false">use my text</button>
+              <label class="key key--icon key--file"><span class="ico-slot" data-icon="up"></span>load .txt<input type="file" id="art-text-file" accept=".txt,text/plain"></label>
+              <label class="key key--icon key--file"><span class="ico-slot" data-icon="up"></span>picture to ascii<input type="file" id="art-image-file" accept="image/*"></label>
+              <button type="button" class="key" id="art-use-image" aria-pressed="false" hidden>use my picture</button>
+            </div>
+            <p class="field__hint field__hint--block">a picture is redrawn as halftone cells in this browser and kept in local storage. it is never uploaded. library pieces are from <a href="https://www.ascii-magic.com/ascii" target="_blank" rel="noopener noreferrer">ascii magic</a> (MIT).</p>
+          </section>
+
           <section class="config__pane" data-pane="startup" role="tabpanel" aria-label="Startup" hidden>
             <h2 class="config__h">[startup]</h2>
             <div class="field"><label for="cfg-boot">boot screen</label>
@@ -263,6 +339,7 @@
             </div>
             <div class="field"><label for="cfg-startmode">open in</label>
               <select id="cfg-startmode" name="startMode">
+                <option value="home">home</option>
                 <option value="last">last mode used</option>
                 <option value="desktop">desktop</option>
                 <option value="focus">focus</option>
@@ -328,12 +405,15 @@
     </section>
   </main>
 
-  <!-- full-screen modes -->
+  <!-- shared ascii art field: home mode, and focus/zen when bg theme is ascii -->
+  <div class="home__field" id="home-field" aria-hidden="true" hidden></div>
+
+  <!-- full-screen modes: one stage skeleton for home · focus · zen -->
   <section class="stage stage--focus" id="stage-focus" aria-label="Focus mode" hidden>
     <p class="stage__label">focus mode <span class="dim">· esc to leave</span></p>
-    <div class="focus focus--stage" data-focus-view>
-      <p class="focus__task" id="stage-task"></p>
-      <p class="focus__time" data-focus-time role="timer">25:00</p>
+    <div class="stage__core focus focus--stage" data-focus-view>
+      <p class="stage__meta focus__task" id="stage-task"></p>
+      <p class="stage__display focus__time" data-focus-time role="timer">25:00</p>
       <pre class="focus__bar" data-focus-bar aria-hidden="true"></pre>
       <div class="focus__row">
         <button type="button" class="key key--on" data-focus-start>start</button>
@@ -345,15 +425,25 @@
           <button type="button" class="key" role="radio" aria-checked="false" data-min="5">05</button>
         </span>
       </div>
-      <p class="stage__sessions dim" id="stage-sessions"></p>
+      <p class="stage__meta stage__sessions dim" id="stage-sessions"></p>
+    </div>
+  </section>
+
+  <section class="stage stage--home" id="stage-home" aria-label="Home" hidden>
+    <div class="stage__core home__core" id="home-core">
+      <p class="home__clock"><time class="stage__display home__time" id="home-time">--:--</time><span class="home__meta" aria-hidden="true"><span id="home-ampm"></span><span id="home-secs"></span></span></p>
+      <p class="stage__meta home__date" id="home-date"></p>
+      <div class="home__slot" id="home-slot"></div>
     </div>
   </section>
 
   <section class="stage stage--zen" id="stage-zen" aria-label="Zen mode" hidden>
     <p class="stage__label">zen <span class="dim">· esc to leave</span></p>
-    <p class="zen__time" id="zen-time">--:--</p>
-    <p class="zen__date dim" id="zen-date"></p>
-    <blockquote class="zen__quote" id="zen-quote"></blockquote>
+    <div class="stage__core">
+      <p class="stage__display zen__time" id="zen-time">--:--</p>
+      <p class="stage__meta zen__date dim" id="zen-date"></p>
+      <blockquote class="stage__meta zen__quote" id="zen-quote"></blockquote>
+    </div>
   </section>
 
   <!-- command line -->

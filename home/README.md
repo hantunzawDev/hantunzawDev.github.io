@@ -17,18 +17,19 @@ Drag a window by its title bar, resize it from the bottom-right corner, and doub
 | `world.map` | Dot-matrix world map with your location, the live day/night line and where the sun is overhead |
 | `fortune` | A quote picked for the time and day, with a hint like "morning · monday". `again` picks another. |
 | `feed.rss` | Hacker News, DEV, GitHub (top new repos this week) and Wikipedia news |
-| `viz.app` | Three.js audio visualizer: orb (particle sphere), terrain (scrolling spectrogram landscape) or pulsar (stacked ridgelines), with bloom, driven by your mic or by shared tab/system audio (Chrome/Edge). Closed until you open it. |
+| `viz.app` | Three.js audio visualizer (orb / terrain / pulsar). **Parked for now** — flip `VIZ_ENABLED` in `os.js` to bring it back. File kept at `viz.js`. |
 | `noise.app` | Noise machine and music: 23 ambient layers (colored noise, rain, café, binaural beats…), nine generated genres from lofi to dark techno, internet radio, presets and a sleep timer. In focus and zen a small player sits at the bottom of the stage. Closed until you open it. |
 | `game.exe` | Snake, a typing test and bughunt (a small raycasting shooter) |
 | `config.ini` | Name, fallback city, 12h/24h clock, theme, quotes, links |
 
 ## Modes
 
-Switch modes from the menubar or with `mode <name>`. Esc returns to desktop.
+Switch modes from the menubar, with `mode <name>`, or with alt+0 to alt+3. Esc returns to desktop from focus and zen.
 
+- **home:** the first screen. A clock and the command line as a search bar over animated ASCII art that fills the screen. Pick the art under config → home: 734 pieces from the self-hosted [ascii-magic-art](https://www.ascii-magic.com/ascii) library (MIT, in `vendor/ascii-magic-art`), redrawn in any of its character sets, in its own colours or the theme colour. Or bring your own: paste text art (a line of `---` between frames animates it) or turn a picture into halftone cells, all in the browser. `art random` and `art <name>` switch from the command line. Esc clears the bar. Pick another first screen under config → startup → open in.
 - **desktop:** all the windows.
-- **focus:** only a full-screen pomodoro, showing the task you're working on (`next task` cycles through open todos).
-- **zen:** only a big clock, the date and the quote of the day.
+- **focus:** only a full-screen pomodoro, showing the task you're working on (`next task` cycles through open todos). Background themes via `bg` (including `bg ascii` for the same animated art as home).
+- **zen:** only a big clock, the date and the quote of the day. Same `bg` themes as focus, including `ascii`.
 
 ## Quotes
 
@@ -66,8 +67,8 @@ tools   = <math> · pass [len] · uuid · b64 <text> · unb64 <text> · g|yt|ddg
 quotes  quote [now] · quote add <text> -- <author> @tags · quote ls · quote rm <n> · quote rotate visit|30m|hourly|daily · quote pack <name> on|off · quote match on|off · quote tags
 fun     neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee
 games   snake · type · guess · fps
-audio   viz [mic|sys|noise|off] · viz orb|terrain|pulsar
 noise   noise (play/stop, alt+n) · noise <genre|preset> · noise <layer> [0-100] · noise off <layer> · noise bpm|dark|density|vol <n> · noise save <name> · noise list · radio [station|off] · sleep 30m|off
+bg      bg [off|ascii|audio|drift|aurora|grid|scan|glow] [focus|zen] · bg orb|terrain|pulsar · bg mic|sys|noise|off · [ ] cycle on stage
 system  open|close|max <app> · ls · layout reset · theme <name> · name|city <x> · 12h|24h · history · clear
 ```
 
@@ -75,12 +76,12 @@ system  open|close|max <app> · ls · layout reset · theme <name> · name|city 
 - `pass` and `uuid` copy their result to the clipboard.
 - `timer 10m tea` counts down in the menubar and chimes when time is up.
 - `matrix` runs until you press a key or click.
-- `viz sys` asks to share a tab or screen: tick "share audio". Video is dropped right away; nothing is recorded or sent anywhere. Safari and Firefox can only use `viz mic`.
+- `bg ascii` (focus or zen) shows the same animated ASCII art as home behind the stage; desktop stops it. `bg noise` drives the audio backdrop from whatever noise.app is playing.
 - `quote now` shows the current quote and why it was picked.
 - `noise night-coding` plays a preset; `noise rain 60` adds rain at 60%; `noise list` shows every genre, layer and preset. Nothing plays until you ask, and your last mix comes back (silent) on reload.
 - `noise cafe` plays the café preset; `noise cafe 50` adds just the café layer at 50% (a name that is both a preset and a layer is the preset unless you give a volume). `noise rain 0` is the same as `noise off rain`.
-- `viz noise` and `bg noise` drive the visuals from whatever noise.app is playing.
 - `sleep 30m` fades the sound out over the last minute, then stops. `alt+n` plays or stops from anywhere.
+- `viz` is parked: the command prints `viz.app is parked for now.` Flip `VIZ_ENABLED` in `os.js` to restore the visualizer.
 
 ## Make it your browser's home page
 
@@ -97,7 +98,8 @@ system  open|close|max <app> · ls · layout reset · theme <name> · name|city 
 | `quotes.js` | Quote packs, tag matching and the rotation picker |
 | `games.js` | Snake and the typing test |
 | `fun.js` | cowsay, neofetch, 8ball, the matrix screen and the calculator |
-| `viz.js` | The audio visualizer. Three.js is vendored in `vendor/` (r170, MIT) and loaded only when `viz.app` opens. |
+| `viz.js` | The audio visualizer (parked). Three.js is vendored in `vendor/` (r170, MIT) and loads only when `viz.app` opens with `VIZ_ENABLED`. |
+| `backdrop.js` | Focus/zen stage backgrounds: `off`, `ascii` (shared home art), `audio`, `drift`, `aurora`, `grid`, `scan`, `glow`. |
 | `map.js` | The world map: coastlines from Natural Earth, cached in the browser after the first load |
 
 ## Local preview

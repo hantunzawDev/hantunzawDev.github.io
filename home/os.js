@@ -7,8 +7,10 @@ import { createMap, subsolar } from "./map.js";
 import { PACK_NAMES, ROTATIONS, parseLine, formatLine, contextLabel, slotKey } from "./quotes.js";
 import { snake, typer } from "./games.js";
 import { bughunt } from "./fps.js";
-import { viz, VIZ_MODES, VIZ_SOURCES } from "./viz.js";
 import { backdrop, BG_THEMES } from "./backdrop.js";
+import { artStage, textPiece, imageToArt, imageArtPiece, loadIndex, LOOKS, FEATURED } from "./ascii.js";
+import { AUDIO_SCENES } from "./scenes.js";
+import { SOURCES as AUDIO_SOURCES } from "./audio.js";
 import { cowsay, neofetch, eightBall, HACK, TRAIN, matrix, calc } from "./fun.js";
 import { icon, hydrateIcons } from "./icons.js";
 import { sniff, calcJoke, bump, heat, reaction, applyHeat, consoleBait } from "../assets/js/eggs.js";
@@ -25,15 +27,18 @@ const osReduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const calcReduce = () => settings.motion === "reduced" || (settings.motion !== "full" && osReduce);
 let reduce = calcReduce();
 const small = () => matchMedia("(max-width: 900px)").matches;
+const touch = () => matchMedia("(pointer: coarse)").matches; // no autofocus there: it would pop the keyboard
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const css = (name) => getComputedStyle(document.body).getPropertyValue(name).trim();
 const VERSION = "2.10.0";
 const bootedAt = Date.now();
+const VIZ_ENABLED = false; // viz.app is parked: flip to true to bring it back
 
 /* =========================================================
    window manager: open/close, drag, resize, maximize
    ========================================================= */
-const APPS = ["clock", "wx", "todo", "notes", "focus", "map", "fortune", "feed", "term", "viz", "noise", "game", "config"];
+const APPS_ALL = ["clock", "wx", "todo", "notes", "focus", "map", "fortune", "feed", "term", "viz", "noise", "game", "config"];
+const APPS = VIZ_ENABLED ? APPS_ALL : APPS_ALL.filter((a) => a !== "viz");
 const FILES = { clock: "clock.app", wx: "wx.sh", todo: "todo.txt", notes: "notes.md", focus: "focus.exe", map: "world.map", fortune: "fortune", feed: "feed.rss", term: "term", viz: "viz.app", noise: "noise.app", game: "game.exe", config: "config.ini" };
 const ALIAS = { world: "map", globe: "map", weather: "wx", settings: "config", news: "feed", quote: "fortune", timer: "focus", visualizer: "viz", audio: "viz", terminal: "term", shell: "term", sh: "term", cli: "term", sound: "noise", music: "noise", radio: "noise" };
 const appName = (a) => (Object.hasOwn(ALIAS, a) ? ALIAS[a] : a);
@@ -112,7 +117,7 @@ const toFrac = (r, area) => [(r.left - area.left) / area.width, (r.top - area.to
 // px between tiles and snapped windows, and at the desktop edge (config: windows > gap)
 const gapPx = () => clamp(+settings.gap || 0, 0, 24);
 // every window tiles; opt-in apps (viz, game, config) join at the bottom of the stack
-const TILE_ORDER = ["map", "clock", "feed", "todo", "notes", "wx", "focus", "fortune", "term", "viz", "noise", "game", "config"];
+const TILE_ORDER = ["map", "clock", "feed", "todo", "notes", "wx", "focus", "fortune", "term", ...(VIZ_ENABLED ? ["viz"] : []), "noise", "game", "config"];
 const tileable = (a) => APPS.includes(a);
 const tileOrder = (() => {
   const saved = store.get("tile.order", TILE_ORDER).filter((a) => APPS.includes(a) && tileable(a));
@@ -166,7 +171,7 @@ function masterGeom(apps, W, H) {
   return { cells, seams };
 }
 // how much room each app wants in a bento: content-heavy windows get the big tiles
-const BENTO_WEIGHT = { map: 3, game: 2.6, viz: 2.4, feed: 2.2, term: 2, noise: 1.7, clock: 1.6, config: 1.6, notes: 1.5, todo: 1.3, focus: 1, wx: 1, fortune: 0.85 };
+const BENTO_WEIGHT = { map: 3, game: 2.6, ...(VIZ_ENABLED ? { viz: 2.4 } : {}), feed: 2.2, term: 2, noise: 1.7, clock: 1.6, config: 1.6, notes: 1.5, todo: 1.3, focus: 1, wx: 1, fortune: 0.85 };
 const HERO = 1.5; // the first window in tile order (alt+enter) is the hero tile
 // dragged seam ratios, keyed by the subtree's apps + where it was cut, so a different
 // window set falls back to the automatic split instead of inheriting a stale one
@@ -712,7 +717,7 @@ function openApp(app, { focus = true } = {}) {
     relayout(true);
   }
   if (app === "config") fillConfig();
-  if (app === "viz") mountViz();
+  if (app === "viz" && VIZ_ENABLED) mountViz();
   if (app === "noise") mountNoise();
   if (app === "term") syncTermDock();
   if (focus) (el.querySelector("textarea, input, select") || el.querySelector(".win__ctrl button"))?.focus();
@@ -789,7 +794,7 @@ function syncDock() {
 const APP_GROUPS = [
   ["desk", ["clock", "wx", "map", "fortune"]],
   ["work", ["todo", "notes", "focus", "feed", "term"]],
-  ["media", ["viz", "noise"]],
+  ["media", VIZ_ENABLED ? ["viz", "noise"] : ["noise"]],
 ];
 const kbd = (t) => h("kbd", { className: "menu__kbd", textContent: t });
 function menuItem(label, run, { role = "menuitem", checked, disabled, hint, desc } = {}) {
@@ -847,7 +852,7 @@ const MENUS = {
     const wide = !small();
     return [
       menuHead("mode"),
-      ...MODES.map((m, i) => menuItem(m, () => setMode(m), { role: "menuitemradio", checked: document.body.dataset.mode === m, hint: `⌥${i + 1}` })),
+      ...MODES.map((m, i) => menuItem(m, () => setMode(m), { role: "menuitemradio", checked: document.body.dataset.mode === m, hint: `⌥${MODE_KEYS[m]}` })),
       menuSep(),
       // phones stack windows, so layout and placement options don't apply there
       ...(wide ? layoutItems() : [menuItem("close all windows", () => closeAll())]),
@@ -1146,10 +1151,64 @@ addEventListener("keydown", (e) => {
 });
 
 /* =========================================================
-   modes: desktop · focus · zen
+   modes: home · desktop · focus · zen
    ========================================================= */
-const MODES = ["desktop", "focus", "zen"];
-const stageBg = backdrop({ log }); // three.js / css background behind focus + zen
+const MODES = ["home", "desktop", "focus", "zen"];
+const MODE_KEYS = { home: 0, desktop: 1, focus: 2, zen: 3 }; // alt+digit
+// shared ascii field: home always, focus/zen when bg theme is ascii. one player, no restart on mode hops.
+const DEFAULT_ART = "marine-drive-necklace";
+const homeArt = artStage($("#home-field"));
+let artPreview = null; // small copy in config → home, made when that pane first opens
+// what settings.homeArt points at: a library slug, or one of the two kinds of art you bring yourself
+function artSource() {
+  const a = settings.homeArt;
+  if (a === "custom:text") return textPiece(settings.homeText, { fps: settings.homeFps, fx: settings.homeFx, hot: css("--text") || "#ffffff" });
+  if (a === "custom:image") return imageArtPiece(store.get("homeImage", null));
+  return a || DEFAULT_ART;
+}
+const artOpts = () => ({ look: settings.homeLook, mono: settings.homeMono, fit: settings.homeFit, speed: settings.homeSpeed, reduce });
+function artWanted() {
+  if (document.hidden) return false;
+  const mode = document.body.dataset.mode;
+  if (mode === "home") return true;
+  if ((mode === "focus" || mode === "zen") && stageBg?.theme(mode) === "ascii") return true;
+  return false;
+}
+function syncArtLive() {
+  const on = artWanted();
+  const field = $("#home-field");
+  field.hidden = !on;
+  document.body.classList.toggle("has-art", on);
+  if (on) {
+    if (document.body.dataset.mode === "home") placeHome();
+    if (!homeArt.running) applyArt(); // loads the piece then start()s
+  } else if (homeArt.running) homeArt.stop();
+}
+async function applyArt() {
+  $("#home-field").style.setProperty("--art-dim", String(Math.min(100, Math.max(10, settings.homeDim)) / 100)); // a variable, so the mode fade can own inline opacity
+  let src = artSource() || DEFAULT_ART;
+  if (!(await homeArt.show(src, artOpts())) && src !== DEFAULT_ART) { src = DEFAULT_ART; homeArt.show(src, artOpts()); }
+  artPreview?.show(src, { ...artOpts(), fit: "fit" });
+  syncArtPick();
+  if (artWanted() && !homeArt.running) homeArt.start();
+}
+function setArt(slug) {
+  settings.homeArt = slug;
+  saveSettings();
+  return applyArt();
+}
+// the command line is the footer, lifted into the slot under the clock by css; this tells css where the slot is
+function placeHome() {
+  if (document.body.dataset.mode !== "home") return;
+  document.body.style.setProperty("--home-bar-y", `${Math.round($("#home-slot").getBoundingClientRect().top)}px`);
+}
+// clicking the art keeps the caret in the bar
+$("#stage-home").addEventListener("mousedown", (e) => { e.preventDefault(); if (!touch()) input.focus({ preventScroll: true }); });
+addEventListener("resize", placeHome);
+document.fonts?.ready.then(placeHome);
+const stageBg = backdrop({ log, onTheme: () => syncArtLive() }); // three.js / css / ascii behind focus + zen
+let modeFade = null;
+const MODE_FADE_SEL = "#stage-home, #stage-focus, #stage-zen, #home-field, .backdrop";
 function setMode(mode) {
   if (!MODES.includes(mode)) return false;
   document.body.dataset.mode = mode;
@@ -1157,13 +1216,29 @@ function setMode(mode) {
   store.set("mode", mode);
   $("#stage-focus").hidden = mode !== "focus";
   $("#stage-zen").hidden = mode !== "zen";
+  $("#stage-home").hidden = mode !== "home";
   syncTermDock();
+  input.placeholder = mode === "home" ? "search or type a command" : "type help, a command, or anything to search";
+  if (mode === "home" && !touch()) input.focus({ preventScroll: true });
+  const hadArt = document.body.classList.contains("has-art"); // art already up: it carries across the hop, no fade
+  syncArtLive();
   $$(".modes [role=radio]").forEach((b) => { const on = b.dataset.mode === mode; b.setAttribute("aria-checked", String(on)); b.tabIndex = on ? 0 : -1; });
   if (mode === "focus") { renderStageTask(); $("#stage-focus [data-focus-start]").focus(); }
   if (mode === "zen") renderZen();
   syncMini();
+  // one short opacity crossfade of the whole stage + its background; interruptible, no stagger
+  if (modeFade) { modeFade.kill(); modeFade = null; }
+  if (window.gsap) gsap.set(MODE_FADE_SEL, { clearProps: "opacity" });
   if (mode !== "desktop" && !reduce && window.gsap && !document.hidden) {
-    gsap.from(`#stage-${mode} > *:not(.nz-mini)`, { opacity: 0, y: 8, duration: 0.3, stagger: 0.05, ease: "power2.out", clearProps: "opacity,transform" });
+    const fadeEls = [$(`#stage-${mode}`)];
+    const bg = stageBg.theme(mode);
+    if ((mode === "focus" || mode === "zen") && bg && bg !== "off" && bg !== "ascii") fadeEls.push($(".backdrop"));
+    const field = artWanted() && !hadArt ? $("#home-field") : null;
+    const all = field ? [...fadeEls, field] : fadeEls;
+    gsap.set(all, { opacity: 0 });
+    modeFade = gsap.timeline({ defaults: { duration: 0.16, ease: "power1.out" }, onComplete: () => { modeFade = null; gsap.set(all, { clearProps: "opacity" }); } })
+      .to(fadeEls, { opacity: 1 }, 0);
+    if (field) modeFade.to(field, { opacity: () => parseFloat(getComputedStyle(field).getPropertyValue("--art-dim")) || 1 }, 0);
   }
   return true;
 }
@@ -1180,12 +1255,12 @@ $$(".modes [role=radio]").forEach((b) => {
     $(`.modes [data-mode="${next}"]`).focus();
   });
 });
-// alt+1/2/3 switch modes from anywhere, even while typing (alt+digit types nothing useful)
+// alt+0/1/2/3 switch modes from anywhere, even while typing (alt+digit types nothing useful)
 addEventListener("keydown", (e) => {
   if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
   if (e.code === "Comma") { e.preventDefault(); openConfig(); return; }
   if (e.code === "KeyN") { e.preventDefault(); loadNoise().then((ui) => ui.toggle(), (err) => log(`noise.app: ${err.message}`, "err")); return; }
-  const m = { Digit1: "desktop", Digit2: "focus", Digit3: "zen" }[e.code];
+  const m = { Digit0: "home", Digit1: "desktop", Digit2: "focus", Digit3: "zen" }[e.code];
   if (!m) return;
   e.preventDefault();
   setMode(m);
@@ -1223,6 +1298,7 @@ function tick() {
   const hm = hhmm(now), ss = pad(now.getSeconds());
   $("#st-time").textContent = !settings.secs ? hm : settings.h24 ? `${hm}:${ss}` : hm.replace(/(\d{2})(?=[a-z]|$)/, `$1:${ss}`);
   $("#clock-s").textContent = pad(now.getSeconds());
+  $("#home-secs").textContent = settings.secs ? ss : "";
   renderTimers();
   if (now.getMinutes() !== lastMinute) {
     lastMinute = now.getMinutes();
@@ -1230,6 +1306,10 @@ function tick() {
     const time = `${hrs}:${pad(now.getMinutes())}`;
     $("#clock").textContent = time;
     $("#zen-time").textContent = time;
+    $("#home-time").textContent = time;
+    $("#home-time").dateTime = now.toISOString();
+    $("#home-ampm").textContent = settings.h24 ? "" : now.getHours() < 12 ? "am" : "pm";
+    $("#home-date").textContent = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long" }).format(now).toLowerCase().replace(/,/g, "");
     renderMapInfo();
     const slot = slotKey(settings.qRotation, now);
     if (slot && slot !== qSlot) { qSlot = slot; qSalt = 0; renderFortune(); }
@@ -1523,10 +1603,18 @@ function startGame(name) {
   game = fn($("#game"), { setMeta: (m) => ($("#game-meta").textContent = m), log });
 }
 /* =========================================================
-   viz.app (three.js is loaded only when the window opens)
+   viz.app (parked behind VIZ_ENABLED; three.js only loads when opened)
    ========================================================= */
-let vizApp = null;
-function mountViz() { vizApp ??= viz($("#viz"), { setMeta: (m) => ($("#viz-meta").textContent = m), log }); return vizApp; }
+let vizApp = null, vizModP = null;
+const loadVizMod = () => (VIZ_ENABLED ? (vizModP ??= import("./viz.js")) : Promise.resolve(null));
+function mountViz() {
+  if (!VIZ_ENABLED) return null;
+  loadVizMod().then((m) => {
+    if (!m || !VIZ_ENABLED || win("viz").hidden) return;
+    vizApp ??= m.viz($("#viz"), { setMeta: (meta) => ($("#viz-meta").textContent = meta), log });
+  }, (e) => log(`viz.app: ${e.message}`, "err"));
+  return vizApp;
+}
 function unmountViz() { vizApp?.stop(); vizApp = null; }
 /* noise.app (its modules load on first open; Tone.js only when a genre plays) */
 let noiseP = null, noiseWanted = false;
@@ -1584,6 +1672,7 @@ function applyTheme(name) {
   worldMap?.setColors();
   vizApp?.setColors();
   stageBg.setColors();
+  if (settings.homeArt === "custom:text") applyArt(); // its highlight colour follows the theme
   return true;
 }
 // look: scanlines, glow, motion
@@ -1593,6 +1682,7 @@ function applyLook() {
   reduce = calcReduce();
   document.body.classList.toggle("motion-reduced", reduce);
   document.body.classList.toggle("motion-full", settings.motion === "full");
+  if (homeArt.running || artPreview?.running) applyArt();
 }
 
 /* ---------- saved window layouts ---------- */
@@ -1601,15 +1691,15 @@ function applyLook() {
 const presets = store.get("layouts.v1", {});
 // built-in layouts, seeded once into the saved list so they load, list and delete like any other
 const BUILTIN_PRESETS = {
-  // the default desktop. left to right: clock over weather · world map over the visualizer ·
+  // the default desktop. left to right: clock over weather · world map (over viz when enabled) ·
   // noise · feed · focus, todo, notes and fortune stacked
   studio: {
-    builtin: true, version: 2, tile: true, tileLayout: "columns", mfact: 0.55, splits: {}, floats: ["config"],
-    open: ["clock", "wx", "map", "viz", "noise", "feed", "focus", "todo", "notes", "fortune"],
-    order: ["clock", "wx", "map", "viz", "noise", "feed", "focus", "todo", "notes", "fortune"],
+    builtin: true, version: VIZ_ENABLED ? 5 : 4, tile: true, tileLayout: "columns", mfact: 0.55, splits: {}, floats: ["config"],
+    open: ["clock", "wx", "map", ...(VIZ_ENABLED ? ["viz"] : []), "noise", "feed", "focus", "todo", "notes", "fortune"],
+    order: ["clock", "wx", "map", ...(VIZ_ENABLED ? ["viz"] : []), "noise", "feed", "focus", "todo", "notes", "fortune"],
     groups: { name: "studio", cols: [
       { w: 0.176, rows: [["clock", 0.39], ["wx", 0.61]] },
-      { w: 0.256, rows: [["map", 0.37], ["viz", 0.63]] },
+      { w: 0.256, rows: VIZ_ENABLED ? [["map", 0.37], ["viz", 0.63]] : [["map", 1]] },
       { w: 0.176, rows: [["noise", 1]] },
       { w: 0.2, rows: [["feed", 1]] },
       { w: 0.192, rows: [["focus", 0.27], ["todo", 0.24], ["notes", 0.24], ["fortune", 0.25]] },
@@ -1707,6 +1797,7 @@ function showPane(name, { focus = false } = {}) {
   $$(".config__pane", cfg).forEach((p) => { p.hidden = p.dataset.pane !== name; });
   $(".config__panes", cfg).scrollTop = 0;
   store.set("cfg.pane", name);
+  if (name === "home") openArtPane(); else artPreview?.stop();
 }
 cfgTabs.forEach((t, i) => {
   t.addEventListener("click", () => showPane(t.dataset.pane));
@@ -1724,6 +1815,7 @@ function openConfig(pane) {
 }
 
 // read and write a settings key through the form, whatever control it lives in
+const UNITS = { mfact: (v) => `${Math.round(v * 100)}%`, homeDim: (v) => `${v}%`, homeSpeed: (v) => `${v}×`, homeFps: (v) => `${v} fps` };
 function fieldOf(k) { const f = cfg.elements[k]; return f && (f instanceof RadioNodeList || f.name === k) ? f : null; }
 function writeField(k, v) {
   const f = fieldOf(k);
@@ -1731,7 +1823,7 @@ function writeField(k, v) {
   if (f instanceof RadioNodeList) { for (const r of f) r.checked = r.value === String(v); return; }
   if (f.type === "checkbox") f.checked = !!v; else f.value = v;
   const o = $(`[data-out="${k}"]`, cfg);
-  if (o) o.textContent = k === "mfact" ? `${Math.round(v * 100)}%` : `${v}px`;
+  if (o) o.textContent = (UNITS[k] || ((x) => `${x}px`))(v);
 }
 function readField(k) {
   const f = fieldOf(k);
@@ -1771,6 +1863,8 @@ const LIVE = {
   mfact: () => relayout(true), gap: () => relayout(true), tileLayout: () => setTileLayout(settings.tileLayout, { say: false }),
   qRotation: requote, qMatch: requote, qp_dev: requote, qp_stoic: requote, qp_motivation: requote, qp_rest: requote, qCustom: requote,
   linksMenu: syncLinksMenu,
+  homeLook: applyArt, homeMono: applyArt, homeFit: applyArt, homeDim: applyArt, homeSpeed: applyArt,
+  homeText: applyArt, homeFps: applyArt, homeFx: applyArt,
 };
 function commit(k) {
   if (!Object.hasOwn(settings, k) || !fieldOf(k)) return;
@@ -1791,6 +1885,89 @@ cfg.addEventListener("input", (e) => {
 });
 cfg.addEventListener("change", (e) => { if (e.target.name) commit(e.target.name); });
 cfg.addEventListener("submit", (e) => { e.preventDefault(); const k = document.activeElement?.name; if (k) commit(k); });
+
+/* ---------- config → home: pick the art behind the clock ---------- */
+const artList = $("#art-list"), artQ = $("#art-q"), artCat = $("#art-cat");
+let artIndex = null;
+const artName = (slug = settings.homeArt) => slug === "custom:text" ? "my text art" : slug === "custom:image" ? (store.get("homeImage", {}).name || "my image") : artIndex?.pieces.find((p) => p.slug === slug)?.name || slug;
+function artMatches() {
+  const words = artQ.value.trim().toLowerCase().split(/\s+/).filter(Boolean), cat = artCat.value;
+  let rows = artIndex.pieces;
+  // a search always looks through everything, whatever the shortlist says
+  if (cat === "featured") { if (!words.length) rows = FEATURED.map((s) => rows.find((p) => p.slug === s)).filter(Boolean); }
+  else if (cat === "scenes") rows = rows.filter((p) => p.square);
+  else if (cat) rows = rows.filter((p) => p.cat === cat);
+  if (words.length) rows = rows.filter((p) => { const hay = `${p.slug} ${p.name} ${p.tags} ${artIndex.cats.get(p.cat) || ""}`.toLowerCase(); return words.every((w) => hay.includes(w)); });
+  return rows;
+}
+function renderArtList() {
+  if (!artIndex) return;
+  const rows = artMatches();
+  artList.replaceChildren(...rows.map((p) => {
+    const b = h("button", { type: "button", className: "artrow" },
+      h("span", { className: "artrow__name" }, p.name),
+      h("span", { className: "artrow__meta" }, `${(artIndex.cats.get(p.cat) || p.cat).toLowerCase()} · ${p.cols}×${p.rows}`));
+    b.dataset.slug = p.slug;
+    return h("li", {}, b);
+  }));
+  $("#art-count").textContent = rows.length ? `${rows.length} of ${artIndex.pieces.length}` : "nothing matches";
+  syncArtPick();
+}
+function syncArtPick() {
+  for (const b of $$(".artrow", artList)) b.setAttribute("aria-pressed", String(b.dataset.slug === settings.homeArt));
+  const mine = settings.homeArt.startsWith("custom:");
+  $("#art-now").textContent = artName();
+  $("#art-now-meta").textContent = mine ? "yours" : (artIndex?.pieces.find((p) => p.slug === settings.homeArt)?.cat || "");
+  $("#art-use-text").setAttribute("aria-pressed", String(settings.homeArt === "custom:text"));
+  $("#art-use-image").hidden = !store.get("homeImage", null);
+  $("#art-use-image").setAttribute("aria-pressed", String(settings.homeArt === "custom:image"));
+}
+async function openArtPane() {
+  artPreview ||= artStage($("#art-preview"));
+  artPreview.start();
+  applyArt();
+  if (artIndex) return;
+  try {
+    artIndex = await loadIndex();
+    artCat.append(...[...artIndex.cats].map(([id, name]) => h("option", { value: id }, name.toLowerCase())));
+    artQ.placeholder = `search ${artIndex.pieces.length} pieces`;
+    renderArtList();
+  } catch (err) { $("#art-count").textContent = "could not load the art list"; log(`art: ${err.message}`, "err"); }
+}
+artQ.addEventListener("input", renderArtList);
+artCat.addEventListener("change", renderArtList);
+artList.addEventListener("click", (e) => { const b = e.target.closest(".artrow"); if (b) { setArt(b.dataset.slug); flashSaved(); } });
+$("#art-shuffle").addEventListener("click", () => {
+  const rows = artIndex ? artMatches().filter((p) => p.slug !== settings.homeArt) : [];
+  if (!rows.length) return;
+  const p = rows[Math.floor(Math.random() * rows.length)];
+  setArt(p.slug); flashSaved();
+  $(`.artrow[data-slug="${p.slug}"]`, artList)?.scrollIntoView({ block: "nearest" });
+});
+$("#art-use-text").addEventListener("click", () => {
+  if (!textPiece(settings.homeText)) { flashSaved("paste some art first"); $("#cfg-hometext").focus(); return; }
+  setArt("custom:text"); flashSaved();
+});
+$("#art-use-image").addEventListener("click", () => { setArt("custom:image"); flashSaved(); });
+$("#art-text-file").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  if (f.size > 400_000) { flashSaved("that file is too big"); return; }
+  settings.homeText = (await f.text()).replace(/\r/g, "");
+  writeField("homeText", settings.homeText);
+  if (!textPiece(settings.homeText)) { saveSettings(); flashSaved("no art in that file"); return; }
+  setArt("custom:text"); flashSaved("loaded");
+});
+$("#art-image-file").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  try {
+    const art = await imageToArt(f); // drawn and reduced here; the picture is never uploaded
+    store.set("homeImage", art);
+    if (!store.get("homeImage", null)) throw new Error("no room to save it");
+    setArt("custom:image"); flashSaved("converted");
+  } catch (err) { flashSaved("could not use that image"); log(`art: ${err.message}`, "err"); }
+});
 
 // windows pane: open/close toggles for every app
 function renderAppGrid() {
@@ -2001,15 +2178,16 @@ let hIdx = history.length;
 
 const HELP = {
   todo:   "t <task> · done <n> · rm <n> · note <text> · cat todo.txt|notes.md",
-  focus:  "f [min] · pause · reset · mode desktop|focus|zen · timer 10m [label] · timers",
+  focus:  "f [min] · pause · reset · mode home|desktop|focus|zen · timer 10m [label] · timers",
   info:   "wx · news hn|dev|gh|world · define <word> · wiki <topic> · date · uptime",
   tools:  "= <math> · pass [len] · uuid · b64 <text> · unb64 <text> · g|yt|ddg|gh <query> · <link name>",
   quotes: "quote [now] · quote add <text> -- <author> @tags · quote ls · quote rm <n> · quote rotate visit|30m|hourly|daily · quote pack <name> on|off · quote match on|off · quote tags",
   fun:    "neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee",
   games:  "snake · type · guess · fps (bughunt)",
-  audio:  "viz [mic|sys|noise|off] · viz orb|terrain|pulsar",
+  ...(VIZ_ENABLED ? { audio: "viz [mic|sys|noise|off] · viz orb|terrain|pulsar" } : {}),
   noise:  "noise (play/stop, alt+n) · noise <genre|preset> · noise <layer> [0-100] · noise off <layer> · noise bpm|dark|density|vol <n> · noise save <name> · noise list · radio [station|off] · sleep 30m|off",
-  bg:     "bg [off|audio|drift|aurora|grid|scan|glow] [focus|zen] · bg orb|terrain|pulsar · bg mic|sys|noise|off · [ ] cycle on stage",
+  art:    "art (what is playing) · art random · art <name> · more under config → home",
+  bg:     `bg [off|ascii|audio|drift|aurora|grid|scan|glow] [focus|zen] · bg orb|terrain|pulsar · bg mic|sys|noise|off · [ ] cycle on stage`,
   system: "open|close|max <app> · ls · layout ls|save|load|rm|startup <name> · layout reset · config [general|look|windows|startup|links|quotes|data] · close all|others · reopen · tile [on|off|bento|master|hero|rebalance] · arrange · zones [app] · float [app] [on|off] · snap on|off · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
 };
 const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : "#"; } catch { return "#"; } }; // feed/calendar URLs are third-party data
@@ -2052,7 +2230,22 @@ const COMMANDS = {
   pause: () => { focusPause(); log("focus.exe: paused."); },
   stop: () => COMMANDS.pause(),
   reset: () => { focusReset(); log("focus.exe: reset."); },
-  mode: (a) => (setMode(a || "desktop") ? log(`mode: ${a || "desktop"}`, "ok") : log("usage: mode desktop|focus|zen", "err")),
+  mode: (a) => (setMode(a || "desktop") ? log(`mode: ${a || "desktop"}`, "ok") : log("usage: mode home|desktop|focus|zen", "err")),
+  home: () => COMMANDS.mode("home"),
+  art: async (a) => {
+    const q = (a || "").trim().toLowerCase();
+    if (!q) { log(`art: ${artName()} (${settings.homeArt}). try art random, art <name>, or config → home.`); return; }
+    let idx;
+    try { idx = artIndex ||= await loadIndex(); } catch (err) { log(`art: ${err.message}`, "err"); return; }
+    const words = q.split(/\s+/);
+    const hits = q === "random" || q === "shuffle" ? idx.pieces.filter((p) => p.slug !== settings.homeArt)
+      : idx.pieces.filter((p) => { const hay = `${p.slug} ${p.name} ${p.tags}`.toLowerCase(); return words.every((w) => hay.includes(w)); });
+    if (!hits.length) { log(`art: nothing called "${q}".`, "err"); return; }
+    const exact = hits.find((p) => p.slug === q.replace(/\s+/g, "-"));
+    const p = exact || hits[q === "random" || q === "shuffle" ? Math.floor(Math.random() * hits.length) : 0];
+    await setArt(p.slug);
+    log(`art: ${p.name}${hits.length > 1 && !exact && q !== "random" && q !== "shuffle" ? ` (${hits.length - 1} more match)` : ""}`, "ok");
+  },
   zen: () => COMMANDS.mode("zen"),
   desktop: () => COMMANDS.mode("desktop"),
   exit: () => (document.body.dataset.mode !== "desktop" ? setMode("desktop") : log("there is no exit. you live here now.")),
@@ -2187,15 +2380,20 @@ const COMMANDS = {
   fps: () => { startGame("fps"); log("bughunt.exe: click to lock the mouse. wasd move, mouse/arrows turn, space or click fires, m map.", "ok"); },
   bughunt: () => COMMANDS.fps(),
   viz: (a) => {
+    if (!VIZ_ENABLED) return log("viz.app is parked for now.");
     a = (a || "").toLowerCase();
-    if (a && !VIZ_SOURCES.includes(a) && !VIZ_MODES.includes(a)) return log(`usage: viz [${VIZ_SOURCES.join("|")}] · viz ${VIZ_MODES.join("|")}`, "err");
-    openApp("viz", { focus: false });
-    const v = mountViz();
-    if (VIZ_MODES.includes(a)) { v.setMode(a); return log(`viz: ${a}`, "ok"); }
-    if (a) return v.setSource(a);
-    log("viz.app: pick mic or sys (chrome/edge: tick \"share audio\"). keys 1 2 3 switch scenes.", "ok");
+    loadVizMod().then((m) => {
+      if (!m) return;
+      if (a && !m.VIZ_SOURCES.includes(a) && !m.VIZ_MODES.includes(a)) return log(`usage: viz [${m.VIZ_SOURCES.join("|")}] · viz ${m.VIZ_MODES.join("|")}`, "err");
+      openApp("viz", { focus: false });
+      const v = (vizApp ??= m.viz($("#viz"), { setMeta: (meta) => ($("#viz-meta").textContent = meta), log }));
+      if (m.VIZ_MODES.includes(a)) { v.setMode(a); return log(`viz: ${a}`, "ok"); }
+      if (a) return v.setSource(a);
+      log("viz.app: pick mic or sys (chrome/edge: tick \"share audio\"). keys 1 2 3 switch scenes.", "ok");
+    }, (e) => log(`viz.app: ${e.message}`, "err"));
   },
   visualizer: (a) => COMMANDS.viz(a),
+  audio: (a) => COMMANDS.viz(a),
   noise: (a) => noiseCmd("noise", a),
   radio: (a) => noiseCmd("radio", a),
   sleep: (a) => noiseCmd("sleep", a),
@@ -2209,8 +2407,8 @@ const COMMANDS = {
       if (document.body.dataset.mode === "desktop") setMode(m);
       return log(`bg: ${m} → ${x}`, "ok");
     }
-    if (VIZ_MODES.includes(x)) { stageBg.setScene(x); return log(`bg: audio scene → ${x}`, "ok"); }
-    if (VIZ_SOURCES.includes(x)) {
+    if (AUDIO_SCENES.includes(x)) { stageBg.setScene(x); return log(`bg: audio scene → ${x}`, "ok"); }
+    if (AUDIO_SOURCES.includes(x)) {
       if (!stage) return log("bg: enter focus or zen first (mode zen), then pick a source.", "err");
       return stageBg.setSource(x);
     }
@@ -2398,7 +2596,12 @@ input.addEventListener("keydown", (e) => {
     else if (c === "mode") { pool = MODES; prefix = c + " "; }
     else if (c === "tile" || c === "snap") { pool = c === "tile" ? ["on", "off", ...TILE_LAYOUTS, "hero", "rebalance"] : ["on", "off"]; prefix = c + " "; }
     else if (c === "news") { pool = Object.keys(FEEDS); prefix = c + " "; }
-    else if (c === "viz") { pool = [...VIZ_SOURCES, ...VIZ_MODES]; prefix = c + " "; }
+    else if (c === "viz" && VIZ_ENABLED) { pool = [...AUDIO_SOURCES, ...AUDIO_SCENES]; prefix = c + " "; }
+    else if (c === "bg") {
+      pool = r.length <= 1 ? [...BG_THEMES, ...AUDIO_SCENES, ...AUDIO_SOURCES] : ["focus", "zen"];
+      prefix = r.length <= 1 ? c + " " : `${c} ${r[0]} `;
+      if (r.length > 1) r.shift();
+    }
     else if (c === "help") { pool = Object.keys(HELP); prefix = c + " "; }
     else if (c === "quote" && r.length === 1) { pool = ["now", "add", "ls", "rm", "rotate", "pack", "match", "tags"]; prefix = c + " "; }
     else if (c === "quote" && r[0] === "rotate") { pool = Object.keys(ROTATIONS); prefix = "quote rotate "; r.shift(); }
@@ -2422,13 +2625,16 @@ input.addEventListener("keydown", (e) => {
     e.preventDefault();
     if (hits.length === 1) input.value = prefix + hits[0] + " ";
     else if (hits.length > 1) log(hits.join("  "));
-  } else if (e.key === "Escape") { input.blur(); if (!input.value && document.body.dataset.mode !== "desktop") setMode("desktop"); }
+  } else if (e.key === "Escape") {
+    if (document.body.dataset.mode === "home") { input.value = ""; return; }
+    input.blur(); if (!input.value && document.body.dataset.mode !== "desktop") setMode("desktop");
+  }
 });
 addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName);
   const inGame = (game || vizApp) && document.activeElement?.tagName === "CANVAS";
   if (e.key === "/" && !typing && !inGame) { e.preventDefault(); focusCmd(); }
-  if (e.key === "Escape" && !typing && document.body.dataset.mode !== "desktop") setMode("desktop");
+  if (e.key === "Escape" && !typing && !["desktop", "home"].includes(document.body.dataset.mode)) setMode("desktop");
 });
 
 /* =========================================================
@@ -2441,7 +2647,10 @@ async function refreshAll() {
   await Promise.allSettled([loadWx(true), loadFeed(feedSrc, true)]);
   log("done.", "ok");
 }
-document.addEventListener("visibilitychange", () => { if (!document.hidden) { loadWx(); loadFeed(); } });
+document.addEventListener("visibilitychange", () => {
+  syncArtLive();
+  if (!document.hidden) { loadWx(); loadFeed(); }
+});
 
 /* =========================================================
    boot
@@ -2493,7 +2702,7 @@ async function boot({ force = false } = {}) {
     `mount /home/${(settings.name || "user").toLowerCase()} ........ ok`,
     "net: open-meteo hn dev gh wiki .. ok",
     "games: snake type guess fps ..... ok",
-    "audio: viz (three.js, lazy) ..... ok",
+    ...(VIZ_ENABLED ? ["audio: viz (three.js, lazy) ..... ok"] : []),
     `layout: ${presets[settings.startLayout] ? settings.startLayout : "last session"} · ${APPS.filter((a) => !win(a).hidden).length} windows`,
     `todo: ${todos.filter((t) => !t.done).length} open · notes: ${notesEl.value.length} ch`,
     "",
@@ -2559,7 +2768,8 @@ async function start() {
   syncLayoutChip();
   syncTermDock();
   relayout();
-  if (!win("viz").hidden) mountViz();
+  if (!VIZ_ENABLED) { win("viz").hidden = true; closed.add("viz"); store.set("closed.v2", [...closed]); }
+  else if (!win("viz").hidden) mountViz();
   if (!win("noise").hidden) mountNoise();
   noiseRestore();
   if (!win("game").hidden) closeApp("game"); // games don't resume across reloads
@@ -2575,11 +2785,17 @@ async function start() {
   renderFortune();
   tick();
   selectFeed(feedSrc);
-  setMode(settings.startMode === "last" ? store.get("mode", "desktop") : settings.startMode);
+  if (!store.get("homeIntro")) {
+    store.set("homeIntro", 1);
+    if (["last", "desktop"].includes(settings.startMode)) { settings.startMode = "home"; saveSettings(); }
+  }
+  setMode(settings.startMode === "last" ? store.get("mode", "home") : settings.startMode);
   worldMap = createMap($("#map"), $("#map-pin"));
   loadWx();
 
   await boot();
+  // the page is hidden until boot hands over, so the focus set by setMode did not land
+  if (document.body.dataset.mode === "home" && !touch()) { input.focus({ preventScroll: true }); placeHome(); }
   log("hzOS ready. type `help`.", "ok");
   armOutTimer(4000);
 }

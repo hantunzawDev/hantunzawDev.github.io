@@ -1,14 +1,15 @@
 // Backdrop for the focus and zen stages. One fixed layer behind both stages:
-// a three.js canvas for the 3D themes (audio, drift, aurora) and plain CSS for
-// the rest (grid, scan, glow). Each mode remembers its own theme. three.js is
-// only imported the first time a 3D theme is shown, and nothing renders while
-// the desktop is up or the tab is hidden.
+// a three.js canvas for the 3D themes (audio, drift, aurora), plain CSS for
+// grid/scan/glow, and ascii (drawn by the shared home art field in os.js).
+// Each mode remembers its own theme. three.js is only imported the first time
+// a 3D theme is shown, and nothing renders while the desktop is up or the tab
+// is hidden.
 import { store } from "./data.js";
 import { audio, SOURCES } from "./audio.js";
 import { MAKERS, AUDIO_SCENES } from "./scenes.js";
 import { createPost } from "./post.js";
 
-export const BG_THEMES = ["off", "audio", "drift", "aurora", "grid", "scan", "glow"];
+export const BG_THEMES = ["off", "ascii", "audio", "drift", "aurora", "grid", "scan", "glow"];
 const GL_THEMES = ["audio", "drift", "aurora"];
 const STAGES = ["focus", "zen"];
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -20,7 +21,7 @@ const h = (tag, props = {}, ...kids) => {
 };
 const cssVar = (name) => getComputedStyle(document.body).getPropertyValue(name).trim();
 
-export function backdrop({ log = () => {} } = {}) {
+export function backdrop({ log = () => {}, onTheme = () => {} } = {}) {
   const pick = (v, list, dflt) => (list.includes(v) ? v : dflt);
   const theme = Object.fromEntries(STAGES.map((m) => [m, pick(store.get(`bg.${m}`), BG_THEMES, "off")]));
   let scene = pick(store.get("bg.scene"), AUDIO_SCENES, "orb");
@@ -131,9 +132,11 @@ export function backdrop({ log = () => {} } = {}) {
   }
   function apply() {
     const t = STAGES.includes(mode) ? theme[mode] : "off";
-    layer.hidden = t === "off";
+    // ascii is drawn by the shared home art field in os.js, not this layer
+    layer.hidden = t === "off" || t === "ascii";
     layer.dataset.bg = t;
     syncUi();
+    onTheme(mode, t);
     const key = wanted();
     canvas.hidden = !key;
     if (!key) { stopLoop(); return; }
