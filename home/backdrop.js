@@ -1,5 +1,5 @@
 // Backdrop for the focus and zen stages. One fixed layer behind both stages:
-// a three.js canvas for the 3D themes (audio, drift, aurora), plain CSS for
+// a three.js canvas for the 3D themes (audio, drift), plain CSS for
 // grid/scan/glow, and ascii (drawn by the shared home art field in os.js).
 // Each mode remembers its own theme. three.js is only imported the first time
 // a 3D theme is shown, and nothing renders while the desktop is up or the tab
@@ -9,8 +9,8 @@ import { audio, SOURCES } from "./audio.js";
 import { MAKERS, AUDIO_SCENES } from "./scenes.js";
 import { createPost } from "./post.js";
 
-export const BG_THEMES = ["off", "ascii", "audio", "drift", "aurora", "grid", "scan", "glow"];
-const GL_THEMES = ["audio", "drift", "aurora"];
+export const BG_THEMES = ["off", "ascii", "audio", "drift", "grid", "scan", "glow"];
+const GL_THEMES = ["audio", "drift"];
 const STAGES = ["focus", "zen"];
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 

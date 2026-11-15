@@ -68,7 +68,7 @@ quotes  quote [now] · quote add <text> -- <author> @tags · quote ls · quote r
 fun     neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee
 games   snake · type · guess · fps
 noise   noise (play/stop, alt+n) · noise <genre|preset> · noise <layer> [0-100] · noise off <layer> · noise bpm|dark|density|vol <n> · noise save <name> · noise list · radio [station|off] · sleep 30m|off
-bg      bg [off|ascii|audio|drift|aurora|grid|scan|glow] [focus|zen] · bg orb|terrain|pulsar · bg mic|sys|noise|off · [ ] cycle on stage
+bg      bg [off|ascii|audio|drift|grid|scan|glow] [focus|zen] · bg orb|terrain|pulsar · bg mic|sys|noise|off · [ ] cycle on stage
 system  open|close|max <app> · ls · layout reset · theme <name> · name|city <x> · 12h|24h · history · clear
 ```
 
@@ -99,7 +99,7 @@ system  open|close|max <app> · ls · layout reset · theme <name> · name|city 
 | `games.js` | Snake and the typing test |
 | `fun.js` | cowsay, neofetch, 8ball, the matrix screen and the calculator |
 | `viz.js` | The audio visualizer (parked). Three.js is vendored in `vendor/` (r170, MIT) and loads only when `viz.app` opens with `VIZ_ENABLED`. |
-| `backdrop.js` | Focus/zen stage backgrounds: `off`, `ascii` (shared home art), `audio`, `drift`, `aurora`, `grid`, `scan`, `glow`. |
+| `backdrop.js` | Focus/zen stage backgrounds: `off`, `ascii` (shared home art), `audio`, `drift`, `grid`, `scan`, `glow`. |
 | `map.js` | The world map: coastlines from Natural Earth, cached in the browser after the first load |
 
 ## Local preview

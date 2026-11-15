@@ -2,8 +2,7 @@
 // (THREE, col) and returns { scene, camera, post, update(dt, t, extra), resize?(w, h), dispose }.
 //
 // post: true scenes draw plain intensity (white on black, mostly additive);
-// post.js blooms that and maps it onto the theme colours. post: false scenes
-// (aurora) draw final colours straight to the screen using col.fg / col.bg.
+// post.js blooms that and maps it onto the theme colours.
 // Audio comes from audio.js; the host calls audio.read(t) before update().
 import { audio, bands, waveF, BANDS } from "./audio.js";
 
@@ -451,62 +450,5 @@ function drift(THREE) {
   };
 }
 
-// aurora: one full-screen quad, layered value-noise ribbons in the accent
-function aurora(THREE, col) {
-  const scene = new THREE.Scene();
-  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  const uniforms = {
-    uTime: { value: 0 }, uLevel: { value: 0 }, uAspect: { value: 1 },
-    uColor: { value: col.fg }, uBg: { value: col.bg },
-  };
-  const mat = new THREE.ShaderMaterial({
-    uniforms, depthTest: false, depthWrite: false,
-    vertexShader: /* glsl */`
-      varying vec2 vUv;
-      void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
-    fragmentShader: /* glsl */`
-      uniform float uTime; uniform float uLevel; uniform float uAspect;
-      uniform vec3 uColor; uniform vec3 uBg;
-      varying vec2 vUv;
-      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-      float noise(vec2 p) {
-        vec2 i = floor(p), f = fract(p);
-        vec2 u = f * f * (3.0 - 2.0 * f);
-        return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
-      }
-      float fbm(vec2 p) { float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.03; a *= 0.5; } return v; }
-      void main() {
-        vec2 p = vec2(vUv.x * uAspect, vUv.y);
-        float t = uTime * 0.05;
-        float glow = 0.0;
-        for (int k = 0; k < 3; k++) {
-          float fk = float(k);
-          float y = 0.35 + fk * 0.14 + (fbm(vec2(p.x * 0.9 + t * (1.0 + fk * 0.4), fk * 3.1 + t)) - 0.5) * 0.45;
-          float d = abs(p.y - y);
-          float w = 0.035 + 0.05 * fbm(vec2(p.x * 2.0 - t * 2.0, fk));
-          glow += (0.55 - fk * 0.12) * smoothstep(w * (3.0 + uLevel * 4.0), 0.0, d);
-        }
-        glow *= 0.75 + 0.25 * fbm(p * 3.0 + t * 3.0);
-        // fine dither so the gradient doesn't band on 8-bit screens
-        glow += (hash(gl_FragCoord.xy + uTime) - 0.5) * 0.02;
-        gl_FragColor = vec4(mix(uBg, uColor, clamp(glow * 1.5, 0.0, 1.0) * 0.9), 1.0);
-        #include <colorspace_fragment>
-      }`,
-  });
-  const geo = new THREE.PlaneGeometry(2, 2);
-  scene.add(new THREE.Mesh(geo, mat));
-  let time = 40; // start mid-flow, not on the hash's flat origin
-  return {
-    scene, camera, post: false,
-    update(dt, t, { aspect = 1 } = {}) {
-      if (!reduce) time += dt;
-      uniforms.uTime.value = time;
-      uniforms.uAspect.value = aspect;
-      uniforms.uLevel.value = audio.source !== "off" ? audio.level : 0;
-    },
-    dispose() { geo.dispose(); mat.dispose(); },
-  };
-}
-
 export const AUDIO_SCENES = ["orb", "terrain", "pulsar"];
-export const MAKERS = { orb, terrain, pulsar, drift, aurora };
+export const MAKERS = { orb, terrain, pulsar, drift };
