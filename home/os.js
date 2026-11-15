@@ -84,8 +84,7 @@ const orientation = () => (innerHeight > innerWidth ? "portrait" : "landscape");
 let orient = orientation();
 const loadLayout = (o) => Object.assign({}, ORIENT[o].defaults, store.get(ORIENT[o].key, {}));
 const layout = loadLayout(orient);
-const OPT_IN = ["config", "game", "viz", "noise", "term"]; // closed until asked for
-const closed = new Set(store.get("closed.v2", OPT_IN));
+const closed = new Set(store.get("closed.v2", APPS)); // nothing open until asked for
 if (!store.get("viz.known")) { closed.add("viz"); store.set("viz.known", true); store.set("closed.v2", [...closed]); }
 if (!store.get("noise.known")) { closed.add("noise"); store.set("noise.known", true); store.set("closed.v2", [...closed]); }
 if (!store.get("term.known")) { closed.add("term"); store.set("term.known", true); store.set("closed.v2", [...closed]); }
@@ -813,7 +812,7 @@ const menuHead = (t) => h("div", { className: "menu__head", textContent: t });
 function layoutItems() {
   const wide = !small();
   const on = (k) => settings.tile && tileLayout() === k;
-  const fixed = tileGroups?.name || (presets[DEFAULT_PRESET]?.groups?.name);
+  const fixed = tileGroups?.name;
   return [
     menuHead("arrange windows"),
     ...(fixed ? [menuItem(fixed, () => (on("columns") ? null : presets[fixed] ? (applyPreset(fixed), log(`layout: ${fixed}`, "ok")) : setTileLayout("columns")),
@@ -825,7 +824,7 @@ function layoutItems() {
     menuItem(settings.tile ? "even out tile sizes" : "tidy into a grid", arrangeAll, { disabled: !wide, hint: "⌥A" }),
     menuItem("close all windows", () => closeAll(), { hint: "⌥⇧W" }),
     menuSep(), menuHead("saved layouts"),
-    ...Object.keys(presets).sort().map((n) => menuItem(n, () => { applyPreset(n); log(`layout: ${n}`, "ok"); }, { disabled: !wide, hint: settings.startLayout === n ? "startup" : n === DEFAULT_PRESET ? "default" : "" })),
+    ...Object.keys(presets).sort().map((n) => menuItem(n, () => { applyPreset(n); log(`layout: ${n}`, "ok"); }, { disabled: !wide, hint: settings.startLayout === n ? "startup" : "" })),
     menuItem("save current…", () => { openConfig("windows"); $("#cfg-preset-name").focus(); }, { disabled: !wide }),
     menuItem("reset to default", () => { resetLayout(); log("layout: reset.", "ok"); }, { disabled: !wide }),
   ];
@@ -1107,21 +1106,24 @@ function enableWindow(el) {
   $$(".win__ctrl [data-close]", el).forEach((b) => { b.innerHTML = icon("close"); });
   $$("[data-close]", el).forEach((b) => b.addEventListener("click", () => closeApp(app)));
 }
-// put every window back to its default spot and reopen the default set
+// put every window back to its default spot, free (not tiled), and closed
 function resetLayout() {
-  if (presets[DEFAULT_PRESET] && !small()) { for (const k of Object.keys(splits)) delete splits[k]; saveSplits(); applyPreset(DEFAULT_PRESET); return; }
   store.del(ORIENT[orient].key);
   Object.assign(layout, ORIENT[orient].defaults);
   for (const k of Object.keys(snapPrev)) delete snapPrev[k];
-  settings.mfact = 0.55; saveSettings();
+  settings.mfact = 0.55;
+  settings.tile = false;
+  settings.tileLayout = "bento";
+  saveSettings();
+  tileGroups = null;
+  store.del("tile.groups");
   for (const k of Object.keys(splits)) delete splits[k];
   saveSplits();
   floats.clear(); FLOAT_DEFAULT.forEach((a) => floats.add(a)); store.del("float.v1");
-  APPS.forEach((a) => win(a).classList.remove("is-max"));
-  APPS.filter((a) => !OPT_IN.includes(a)).forEach((a) => openApp(a, { focus: false }));
-  // after reopening, since each reopened window would otherwise claim master
+  APPS.forEach((a) => { win(a).classList.remove("is-max"); closeApp(a); });
   tileOrder.sort((a, b) => (TILE_ORDER.indexOf(a) + 1 || 99) - (TILE_ORDER.indexOf(b) + 1 || 99));
   store.del("tile.order");
+  syncLayoutChip();
   relayout(true);
 }
 // tiling keys (alt / option, matched by physical key so macOS option-characters don't get in the way)
@@ -1691,8 +1693,8 @@ function applyLook() {
 const presets = store.get("layouts.v1", {});
 // built-in layouts, seeded once into the saved list so they load, list and delete like any other
 const BUILTIN_PRESETS = {
-  // the default desktop. left to right: clock over weather · world map (over viz when enabled) ·
-  // noise · feed · focus, todo, notes and fortune stacked
+  // a saved tiled layout, not the startup desktop. left to right: clock over weather ·
+  // world map (over viz when enabled) · noise · feed · focus, todo, notes and fortune stacked
   studio: {
     builtin: true, version: VIZ_ENABLED ? 5 : 4, tile: true, tileLayout: "columns", mfact: 0.55, splits: {}, floats: ["config"],
     open: ["clock", "wx", "map", ...(VIZ_ENABLED ? ["viz"] : []), "noise", "feed", "focus", "todo", "notes", "fortune"],
@@ -1716,7 +1718,6 @@ for (const [n, p] of Object.entries(BUILTIN_PRESETS)) {
   store.set(`layouts.seeded.${n}`, p.version);
   store.set("layouts.v1", presets);
 }
-const DEFAULT_PRESET = "studio";
 const presetName = (s) => String(s || "").trim().toLowerCase().replace(/[^\w-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24);
 function snapshotLayout() {
   return {
@@ -2756,13 +2757,17 @@ async function start() {
   APPS.forEach((app) => { enableWindow(win(app)); win(app).hidden = closed.has(app); });
   win("config").hidden = true; // settings never reopen on their own
   closed.add("config");
-  // the studio layout became the default in 2.10: every desktop starts there once,
-  // after that the session (or a chosen startup layout) is restored as usual
-  const firstStudio = !store.get("layout.studio-default");
-  if (firstStudio) store.set("layout.studio-default", true);
+  // free windows, nothing open, is the desktop default. a layout chosen as startup still wins.
+  // everyone else — including desktops previously dropped onto the studio layout — gets that once,
+  // then the session is restored as usual.
   if (presets[settings.startLayout] && !small()) applyPresetState(presets[settings.startLayout]);
-  else if (firstStudio && presets[DEFAULT_PRESET] && !small()) applyPresetState(presets[DEFAULT_PRESET]);
-  else if (firstStudio) { settings.tile = true; saveSettings(); }
+  else if (!store.get("layout.free-default")) {
+    store.set("layout.free-default", true);
+    settings.tile = false;
+    saveSettings();
+    for (const a of APPS) { win(a).hidden = true; win(a).classList.remove("is-max"); closed.add(a); }
+    store.set("closed.v2", [...closed]);
+  }
   showPane(store.get("cfg.pane", "general"));
   syncLinksMenu();
   syncLayoutChip();
