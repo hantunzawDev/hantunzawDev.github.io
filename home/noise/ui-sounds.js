@@ -26,7 +26,7 @@ const clock = (sec) => {
   const hh = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, ss = String(sec % 60).padStart(2, "0");
   return hh ? `${hh}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
 };
-const STATE_TEXT = { failed: "failed to load", loading: "loading", muted: "muted" };
+const STATE_TEXT = { failed: "failed", loading: "loading", muted: "muted" };
 
 export function buildSounds(R) {
   const { h, icon } = R;
@@ -89,7 +89,8 @@ export function buildSounds(R) {
     const ico = h("span", { class: "nz-tile__ico", "aria-hidden": "true" });
     ico.innerHTML = glyphSvg(L.icon);
     const stateId = `nz-ts-${L.id}`;
-    const stateTxt = h("span", { class: "nz-tile__state", id: stateId });
+    // aria-hidden: the text is read once, through the button's aria-describedby
+    const stateTxt = h("span", { class: "nz-tile__state", id: stateId, "aria-hidden": "true" });
     const btn = h("button", { type: "button", class: "nz-tile__btn", "aria-pressed": "false", "aria-describedby": stateId, onclick: () => R.toggle(L.id) },
       ico, h("span", { class: "nz-tile__name", text: L.name }), stateTxt);
     if (L.desc) btn.title = L.desc;
@@ -169,12 +170,13 @@ export function buildSounds(R) {
     const ico = h("span", { class: "nz-mix__ico", "aria-hidden": "true" });
     ico.innerHTML = glyphSvg(L?.icon ?? id);
     const meter = h("span", { class: "nz-mix__lv", "aria-hidden": "true" }, h("i"), h("i"), h("i"));
+    const flag = h("span", { class: "nz-mix__flag", "aria-hidden": "true" }); // "!" failed · "…" loading: a mark, not only a colour
     const mute = h("button", { type: "button", class: "nz-mix__mute", "aria-pressed": "false", "aria-label": `Mute ${L?.name ?? id}`, onclick: () => (R.muted().has(id) ? R.unmute(id) : R.mute(id)) },
-      ico, h("span", { class: "nz-mix__name", text: L?.name ?? id }), meter);
+      ico, h("span", { class: "nz-mix__name", text: L?.name ?? id }), flag, meter);
     const x = h("button", { type: "button", class: "nz-mix__x", "aria-label": `Remove ${L?.name ?? id}`, onclick: () => R.remove(id) });
     x.innerHTML = icon("close");
     const li = h("li", { class: "nz-mix", "data-id": id }, mute, x);
-    return { li, mute, k: "", lv: 0 };
+    return { li, mute, flag, name: L?.name ?? id, k: "", lv: 0 };
   }
 
   function renderStrip(act, muted) {
@@ -201,6 +203,8 @@ export function buildSounds(R) {
       C.k = k;
       C.li.dataset.state = k;
       C.mute.setAttribute("aria-pressed", String(k === "muted"));
+      C.flag.textContent = k === "failed" ? "!" : k === "loading" ? "…" : "";
+      C.mute.setAttribute("aria-label", k === "failed" ? `Mute ${C.name}, failed to load` : k === "loading" ? `Mute ${C.name}, loading` : `Mute ${C.name}`);
       if (k !== "on" && C.lv) { C.lv = 0; C.li.style.setProperty("--lv", "0"); }
     }
     const n = ids.length;

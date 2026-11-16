@@ -6,8 +6,8 @@
 // window. It shows only while there is a selection, draws on ui.js's single rAF,
 // and in zen it dims to 0.2 after 4 s without input.
 import { bands } from "../audio.js";
+import { reducedMotion, onMotionChange } from "./motion.js";
 
-const RM = matchMedia("(prefers-reduced-motion: reduce)");
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const pct = (v) => String(Math.round(v * 100));
 const mmss = (ms) => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
@@ -37,7 +37,7 @@ export function drawSpectrum(S, cv, C, now, playing) {
   const c = cv.getContext("2d");
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.clearRect(0, 0, w, hh);
-  const plain = RM.matches, MB = S.n, vals = S.vals, peaks = S.peaks;
+  const plain = reducedMotion(), MB = S.n, vals = S.vals, peaks = S.peaks;
   const gap = 2, bw = (w - gap * (MB - 1)) / MB, base = hh - 1.5, top = 2, span = base - top;
   const step = Math.max(1, Math.floor(48 / MB)); // lower 48 of 64 bands (the top 16 are mostly air)
 
@@ -178,7 +178,7 @@ export function createMini(D) {
   function draw(now, playing) {
     if (now - (M.polled || 0) > 250) { M.polled = now; sleep(); }
     // the pill breathes with the sound: border glow follows the master level
-    const lv = playing && !RM.matches ? clamp(D.audio.level * 1.4, 0, 1) : 0;
+    const lv = playing && !reducedMotion() ? clamp(D.audio.level * 1.4, 0, 1) : 0;
     if (Math.abs(lv - (M.lv || 0)) > 0.015) { M.lv = lv; M.root.style.setProperty("--lv", lv.toFixed(3)); }
     drawSpectrum(spec, M.cv, M.colors, now, playing); // the canvas is display:none on narrow screens
   }
@@ -195,12 +195,12 @@ export function createMini(D) {
       const mo = new MutationObserver(() => { if (M) M.colors = readColors(document.body); D.wake(); });
       mo.observe(document.body, { attributes: true, attributeFilter: ["data-theme"] });
       const onRM = () => D.wake();
-      RM.addEventListener("change", onRM);
+      const offRM = onMotionChange(onRM);
       off = [
         () => { for (const ev of evs) removeEventListener(ev, onAny, { capture: true }); },
         () => document.removeEventListener("visibilitychange", onVis),
         () => mo.disconnect(),
-        () => RM.removeEventListener("change", onRM),
+        offRM,
       ];
     }
     if (opts.onExpand) M.onExpand = opts.onExpand;
