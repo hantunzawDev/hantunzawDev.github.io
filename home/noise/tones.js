@@ -1,6 +1,6 @@
 // Tone builders (binaural beats, isochronic pulse), extracted from the old
 // layers.js. Builder signature: (h, t0) => ({ mod(now) → 0..1 }) where `h` is
-// the layers.js toolbox: { ctx, dest, osc, gain, filter, keep, burst, tone, ... }.
+// the sampler.js toolbox: { ctx, dest, srcs, nodes, keep, gain, filter, osc }.
 // Builders take everything from `h` (h.ctx replaces the old module-level ctx).
 import { CARRIER_HZ, BRAINWAVE } from "./catalog.js";
 
