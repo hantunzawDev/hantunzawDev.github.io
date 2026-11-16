@@ -2,9 +2,15 @@
 // audio/* and CORS headers. `soma` is the SomaFM channel id (now-playing JSON).
 const S = (id, vibe, name, url, soma) => (soma ? { id, vibe, name, url, soma } : { id, vibe, name, url });
 
-export const VIBES = ["techno", "coding", "ambient", "lofi", "classical"];
+export const VIBES = ["myanmar", "techno", "coding", "ambient", "lofi", "classical"];
 
 export const STATIONS = [
+  S("padamyar-fm", "myanmar", "Padamyar FM", "https://stream.zeno.fm/og9btsnj00tuv"),
+  S("cherry-fm", "myanmar", "Cherry FM", "https://cherry.akiyaresearch.com:444/stream/89/"),
+  S("mandalay-fm", "myanmar", "Mandalay FM", "https://edge.mixlr.com/channel/nmtev"),
+  S("dvb-digital", "myanmar", "DVB Digital", "https://radio.dvb.digital/listen/dvb.digital/hq.mp3"),
+  S("dwg-radio-burmese", "myanmar", "DWG Radio Burmese", "https://server32349.streamplus.de/;?type=http&nocache=227"),
+  S("voice-of-burma", "myanmar", "Radio Voice of Burma", "https://listen7.myradio24.com/39982"),
   S("technolovers-techno", "techno", "Technolovers TECHNO", "https://stream.technolovers.fm/techno"),
   S("rautemusik-techno", "techno", "rautemusik TECHNO", "https://streams.rautemusik.fm/techno/mp3-192"),
   S("technothorium", "techno", "Technothorium (laut.fm)", "https://stream.laut.fm/technothorium"),
