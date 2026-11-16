@@ -1,0 +1,299 @@
+{
+ "commit": "11c0be2200116a3635880d600fd6953899cc51a3",
+ "sounds": {
+  "light-rain": {
+   "category": "rain",
+   "file": "rec/rain/light-rain.mp3",
+   "dur": 149.87,
+   "trim": 0.966
+  },
+  "heavy-rain": {
+   "category": "rain",
+   "file": "rec/rain/heavy-rain.mp3",
+   "dur": 21.79,
+   "trim": 0.708
+  },
+  "rain-on-window": {
+   "category": "rain",
+   "file": "rec/rain/rain-on-window.mp3",
+   "dur": 33.14,
+   "trim": 0.49
+  },
+  "rain-on-leaves": {
+   "category": "rain",
+   "file": "rec/rain/rain-on-leaves.mp3",
+   "dur": 42.22,
+   "trim": 1.5
+  },
+  "rain-on-tent": {
+   "category": "rain",
+   "file": "rec/rain/rain-on-tent.mp3",
+   "dur": 82.57,
+   "trim": 0.851
+  },
+  "rain-on-car-roof": {
+   "category": "rain",
+   "file": "rec/rain/rain-on-car-roof.mp3",
+   "dur": 10.02,
+   "trim": 1.445
+  },
+  "thunder": {
+   "category": "rain",
+   "file": "rec/rain/thunder.mp3",
+   "dur": 68.55,
+   "trim": 0.767
+  },
+  "waves": {
+   "category": "nature",
+   "file": "rec/nature/waves.mp3",
+   "dur": 98.66,
+   "trim": 1.5
+  },
+  "river": {
+   "category": "nature",
+   "file": "rec/nature/river.mp3",
+   "dur": 113.43,
+   "trim": 1.5
+  },
+  "waterfall": {
+   "category": "nature",
+   "file": "rec/nature/waterfall.mp3",
+   "dur": 23.49,
+   "trim": 0.902
+  },
+  "campfire": {
+   "category": "nature",
+   "file": "rec/nature/campfire.mp3",
+   "dur": 125.41,
+   "trim": 0.668
+  },
+  "wind-in-trees": {
+   "category": "nature",
+   "file": "rec/nature/wind-in-trees.mp3",
+   "dur": 57.56,
+   "trim": 1.5
+  },
+  "wind": {
+   "category": "nature",
+   "file": "rec/nature/wind.mp3",
+   "dur": 73.42,
+   "trim": 1.5
+  },
+  "jungle": {
+   "category": "nature",
+   "file": "rec/nature/jungle.mp3",
+   "dur": 266.7,
+   "trim": 0.733
+  },
+  "droplets": {
+   "category": "nature",
+   "file": "rec/nature/droplets.mp3",
+   "dur": 51.75,
+   "trim": 1.5
+  },
+  "birds": {
+   "category": "animals",
+   "file": "rec/animals/birds.mp3",
+   "dur": 115.12,
+   "trim": 1.047
+  },
+  "crickets": {
+   "category": "animals",
+   "file": "rec/animals/crickets.mp3",
+   "dur": 172.54,
+   "trim": 1.5
+  },
+  "frog": {
+   "category": "animals",
+   "file": "rec/animals/frog.mp3",
+   "dur": 78.65,
+   "trim": 1.396
+  },
+  "crows": {
+   "category": "animals",
+   "file": "rec/animals/crows.mp3",
+   "dur": 58.08,
+   "trim": 1.5
+  },
+  "chickens": {
+   "category": "animals",
+   "file": "rec/animals/chickens.mp3",
+   "dur": 202.08,
+   "trim": 0.776
+  },
+  "dog-barking": {
+   "category": "animals",
+   "file": "rec/animals/dog-barking.mp3",
+   "dur": 16.18,
+   "trim": 0.432
+  },
+  "owl": {
+   "category": "animals",
+   "file": "rec/animals/owl.mp3",
+   "dur": 12.94,
+   "trim": 1.5
+  },
+  "seagulls": {
+   "category": "animals",
+   "file": "rec/animals/seagulls.mp3",
+   "dur": 43.47,
+   "trim": 1.5
+  },
+  "whale": {
+   "category": "animals",
+   "file": "rec/animals/whale.mp3",
+   "dur": 30.01,
+   "trim": 0.813
+  },
+  "busy-street": {
+   "category": "urban",
+   "file": "rec/urban/busy-street.mp3",
+   "dur": 175.36,
+   "trim": 1.5
+  },
+  "traffic": {
+   "category": "urban",
+   "file": "rec/urban/traffic.mp3",
+   "dur": 39.89,
+   "trim": 1.5
+  },
+  "crowd": {
+   "category": "urban",
+   "file": "rec/urban/crowd.mp3",
+   "dur": 72.56,
+   "trim": 1.5
+  },
+  "highway": {
+   "category": "urban",
+   "file": "rec/urban/highway.mp3",
+   "dur": 132.5,
+   "trim": 0.912
+  },
+  "inside-a-train": {
+   "category": "transport",
+   "file": "rec/transport/inside-a-train.mp3",
+   "dur": 66.5,
+   "trim": 1.5
+  },
+  "train": {
+   "category": "transport",
+   "file": "rec/transport/train.mp3",
+   "dur": 61.06,
+   "trim": 0.427
+  },
+  "sailboat": {
+   "category": "transport",
+   "file": "rec/transport/sailboat.mp3",
+   "dur": 160.52,
+   "trim": 0.881
+  },
+  "airplane": {
+   "category": "transport",
+   "file": "rec/transport/airplane.mp3",
+   "dur": 60.03,
+   "trim": 1.5
+  },
+  "cafe": {
+   "category": "places",
+   "file": "rec/places/cafe.mp3",
+   "dur": 199.09,
+   "trim": 1.059
+  },
+  "library": {
+   "category": "places",
+   "file": "rec/places/library.mp3",
+   "dur": 176.53,
+   "trim": 1.5
+  },
+  "office": {
+   "category": "places",
+   "file": "rec/places/office.mp3",
+   "dur": 139.73,
+   "trim": 1.5
+  },
+  "night-village": {
+   "category": "places",
+   "file": "rec/places/night-village.mp3",
+   "dur": 106.42,
+   "trim": 1.5
+  },
+  "temple": {
+   "category": "places",
+   "file": "rec/places/temple.mp3",
+   "dur": 91.62,
+   "trim": 0.543
+  },
+  "restaurant": {
+   "category": "places",
+   "file": "rec/places/restaurant.mp3",
+   "dur": 170.89,
+   "trim": 1.5
+  },
+  "subway-station": {
+   "category": "places",
+   "file": "rec/places/subway-station.mp3",
+   "dur": 171.03,
+   "trim": 1.5
+  },
+  "keyboard": {
+   "category": "things",
+   "file": "rec/things/keyboard.mp3",
+   "dur": 12.15,
+   "trim": 0.653
+  },
+  "clock": {
+   "category": "things",
+   "file": "rec/things/clock.mp3",
+   "dur": 15.94,
+   "trim": 1.5
+  },
+  "ceiling-fan": {
+   "category": "things",
+   "file": "rec/things/ceiling-fan.mp3",
+   "dur": 15.59,
+   "trim": 1.5
+  },
+  "vinyl-effect": {
+   "category": "things",
+   "file": "rec/things/vinyl-effect.mp3",
+   "dur": 65.9,
+   "trim": 1.5
+  },
+  "singing-bowl": {
+   "category": "things",
+   "file": "rec/things/singing-bowl.mp3",
+   "dur": 49.08,
+   "trim": 0.412
+  },
+  "wind-chimes": {
+   "category": "things",
+   "file": "rec/things/wind-chimes.mp3",
+   "dur": 83.01,
+   "trim": 1.122
+  },
+  "typewriter": {
+   "category": "things",
+   "file": "rec/things/typewriter.mp3",
+   "dur": 21.78,
+   "trim": 1.023
+  },
+  "white-noise": {
+   "category": "noise",
+   "file": "rec/noise/white-noise.mp3",
+   "dur": 9.5,
+   "trim": 1.148
+  },
+  "pink-noise": {
+   "category": "noise",
+   "file": "rec/noise/pink-noise.mp3",
+   "dur": 9.51,
+   "trim": 0.589
+  },
+  "brown-noise": {
+   "category": "noise",
+   "file": "rec/noise/brown-noise.mp3",
+   "dur": 9.51,
+   "trim": 1.059
+  }
+ }
+}
