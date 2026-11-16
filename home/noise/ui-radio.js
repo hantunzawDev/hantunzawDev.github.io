@@ -14,6 +14,7 @@
 import { STATIONS, VIBES } from "./stations.js";
 import { glyphSvg } from "./glyphs.js";
 import { buildRail } from "./ui-rail.js";
+import { tileView } from "./radio-view.js";
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -66,17 +67,6 @@ export function buildRadio(R) {
     S.stage.scrollTop = 0;
   }
 
-  // one tile's state from the radio engine: [data-state, status line, now-playing line]
-  function tileView(st, cur) {
-    if (cur !== st.id) return ["off", "tap to tune in", ""];
-    const s = R.status();
-    if (s === "error") return ["failed", "offline · retry", ""];
-    if (s === "loading" || R.engineState() === "loading") return ["loading", "tuning in…", ""];
-    if (R.engineState() === "paused") return ["paused", "paused", ""];
-    const np = st.soma ? R.nowPlaying(st) : "";
-    return ["on", R.analysed() ? "on air" : "playing direct · no viz", np ? `♪ ${np}` : ""];
-  }
-
   function render() {
     const v = R.vibe(), cur = R.current();
     if (v !== S.vibe) showVibe(v);
@@ -84,7 +74,7 @@ export function buildRadio(R) {
     rail.update({ active: v, counts: curVibe ? { [curVibe]: 1 } : {} });
     for (const [id, T] of S.tiles) {
       const st = STATIONS.find((s) => s.id === id);
-      const [k, txt, np] = tileView(st, cur);
+      const [k, txt, np] = tileView(st, cur, { status: R.status(), engineState: R.engineState(), analysed: R.analysed(), np: st.soma ? R.nowPlaying(st) : "" });
       if (k !== T.k) {
         T.k = k;
         T.el.dataset.state = k;

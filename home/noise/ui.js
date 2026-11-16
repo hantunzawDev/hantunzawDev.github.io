@@ -23,6 +23,7 @@ import { STATIONS, VIBES, stationById } from "./stations.js";
 import { PRESETS, sanitizeState } from "./presets.js";
 import { buildSounds } from "./ui-sounds.js";
 import { buildRadio } from "./ui-radio.js";
+import { vibeToShow } from "./radio-view.js";
 import { reducedMotion, onMotionChange } from "./motion.js";
 import { createMini, readColors, drawSpectrum, spectrumState } from "./ui-mini.js";
 import { createCommands } from "./ui-cmd.js";
@@ -104,7 +105,7 @@ layers.onChange(() => {
 let seenStation = null, seenState = engine.state;
 radio.onChange(() => {
   const st = radio.current?.id ?? null;
-  if (st && st !== seenStation) { pick = "radio"; state.station = st; }
+  if (st && st !== seenStation) { pick = "radio"; state.station = st; followStation(true); }
   else if (!st && seenStation) { state.station = null; pick = "none"; }
   seenStation = st;
   persist(); renderSoon();
@@ -360,10 +361,11 @@ const radioCtx = {
   click: clickStation,
 };
 
-// open on the vibe of the saved / playing station, so it is in view
-function followStation() {
+// the vibe follows the station only when the station itself changes (and at mount),
+// never when the user just revisits the tab
+function followStation(stationChanged) {
   const st = state.station ? stationById(state.station) : null;
-  if (st && st.vibe !== state.vibe) state.vibe = st.vibe;
+  state.vibe = vibeToShow({ chosenVibe: state.vibe, savedStationVibe: st?.vibe ?? null, stationChanged });
 }
 
 function build(root) {
@@ -543,7 +545,6 @@ function sleepText() {
 function selectTab(t, user) {
   if (!TABS.includes(t)) return;
   state.tab = t;
-  if (t === "radio") followStation();
   persist();
   if (ui) { render(); if (user) ui.root.querySelector(".nz-panel:not([hidden]) .nz-stage")?.scrollTo(0, 0); wake(); }
 }
@@ -631,7 +632,7 @@ function mount(el) {
   ui.meta = ui.win.querySelector(".win__meta");
   ui.inView = true;
   seenStation = radio.current?.id ?? null;
-  if (state.tab === "radio") followStation();
+  followStation(true);
   colors = readColors(ui.root);
 
   const onKey = (e) => {
