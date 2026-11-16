@@ -1,46 +1,31 @@
 // Presets, default state and the persisted-state sanitiser: pure.
-import { GENRES } from "./patterns.js";
+import { CATEGORIES } from "./catalog.js";
 
 export const PRESETS = [
-  { id: "deep-work", name: "deep work", genre: "dub-techno", knobs: { dark: 0.4 }, layers: { brown: 0.35, alpha: 0.15 } },
-  { id: "night-coding", name: "night coding", genre: "dark-techno", knobs: { dark: 0.8 }, layers: { rain: 0.4 } },
-  { id: "acid-hour", name: "acid hour", genre: "techno", knobs: { dark: 0.3, density: 0.8 }, layers: {} },
-  { id: "cafe", name: "café", genre: "lofi", layers: { cafe: 0.5, rain: 0.2 } },
-  { id: "flow", name: "flow", genre: "dnb", layers: { pink: 0.2 } },
-  { id: "sleep", name: "sleep", genre: null, layers: { brown: 0.5, ocean: 0.4, delta: 0.1 }, sleep: 30 },
-  { id: "space", name: "space", genre: "ambient", layers: { wind: 0.3, theta: 0.1 } },
-  { id: "village-morning", name: "village morning", genre: null, layers: { rooster: 0.55, chickens: 0.35, crows: 0.3, koel: 0.3, birds: 0.45, dogs: 0.12, bicycle: 0.25, monastery: 0.3 } },
-  { id: "yangon", name: "yangon city", genre: null, layers: { cars: 0.5, horns: 0.4, motorbike: 0.22, crowd: 0.45, market: 0.3, crows: 0.45 } },
-  { id: "monsoon-night", name: "monsoon night", genre: null, layers: { rain: 0.55, frogs: 0.55, crickets: 0.3, thunder: 0.22, dogs: 0.08, monastery: 0.12 } },
-  { id: "metta", name: "metta", genre: null, layers: { metta: 0.7, rain: 0.18, birds: 0.12 } },
+  { id: "deep-work", name: "deep work", layers: { "brown-noise": 0.35, alpha: 0.15 } },
+  { id: "cafe", name: "café", layers: { cafe: 0.5, "light-rain": 0.2 } },
+  { id: "sleep", name: "sleep", layers: { "brown-noise": 0.5, waves: 0.4, delta: 0.1 }, sleep: 30 },
+  { id: "village-morning", name: "village morning", layers: { birds: 0.45, chickens: 0.35, crows: 0.3, "dog-barking": 0.12, "wind-in-trees": 0.2, monastery: 0.3 } },
+  { id: "yangon", name: "yangon city", layers: { "busy-street": 0.5, traffic: 0.4, crowd: 0.45, crows: 0.4 } },
+  { id: "monsoon-night", name: "monsoon night", layers: { "heavy-rain": 0.55, frog: 0.55, crickets: 0.3, thunder: 0.22, monastery: 0.1 } },
+  { id: "metta", name: "metta", layers: { metta: 0.7, "light-rain": 0.18, birds: 0.12 } },
+  { id: "forest", name: "forest", layers: { "wind-in-trees": 0.4, birds: 0.4, river: 0.3, crickets: 0.15 } },
+  { id: "ocean", name: "ocean", layers: { waves: 0.6, seagulls: 0.15, wind: 0.2 } },
+  { id: "focus-rain", name: "focus rain", layers: { "rain-on-window": 0.5, "pink-noise": 0.12, alpha: 0.12 } },
 ];
 
-export const DEFAULT_STATE = {
-  vol: 0.7, genre: "techno", knobs: { bpm: 130, dark: 0.5, density: 0.5 }, layers: {}, station: null, tab: "mix",
-};
+export const DEFAULT_STATE = { vol: 0.7, layers: {}, station: null, tab: "sounds", cat: "rain" };
 
-const TABS = ["mix", "music", "radio"];
+const TABS = ["sounds", "radio"];
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const isObj = (o) => o && typeof o === "object" && !Array.isArray(o);
 
+// Old saved state (genre, knobs, tab "music", removed layer ids) is ignored silently.
 export function sanitizeState(raw, known) {
   const D = DEFAULT_STATE;
   const r = isObj(raw) ? raw : {};
-  const genres = (known && known.genres) || GENRES.map((g) => g.id);
-  const genre = genres.includes(r.genre) ? r.genre : D.genre;
-  const g = GENRES.find((x) => x.id === genre) || GENRES[0];
-
   const v = num(r.vol);
-  const kn = isObj(r.knobs) ? r.knobs : {};
-  const bpm = num(kn.bpm), dark = num(kn.dark), density = num(kn.density);
-  const defBpm = genre === D.genre ? D.knobs.bpm : g.bpm[2];
-  const knobs = {
-    bpm: clamp(bpm ?? defBpm, g.bpm[0], g.bpm[1]),
-    dark: dark === null ? D.knobs.dark : clamp(dark, 0, 1),
-    density: density === null ? D.knobs.density : clamp(density, 0, 1),
-  };
-
   const layers = {};
   if (isObj(r.layers)) {
     const ids = (known && known.layers) || [];
@@ -49,12 +34,12 @@ export function sanitizeState(raw, known) {
       if (n !== null && ids.includes(id) && n > 0) layers[id] = clamp(n, 0, 1);
     }
   }
+  const cats = (known && known.cats) || CATEGORIES.map((c) => c.id || c);
   return {
     vol: v === null ? D.vol : clamp(v, 0, 1),
-    genre,
-    knobs,
     layers,
     station: known && known.stations && known.stations.includes(r.station) ? r.station : null,
-    tab: TABS.includes(r.tab) ? r.tab : D.tab,
+    tab: r.tab === "music" ? "sounds" : TABS.includes(r.tab) ? r.tab : D.tab,
+    cat: cats.includes(r.cat) ? r.cat : D.cat,
   };
 }

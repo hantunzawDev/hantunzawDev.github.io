@@ -1,6 +1,5 @@
 // Command-line parsers for noise / radio / sleep: pure, validate against `known`.
 const err = (message) => ({ type: "error", message });
-const KNOBS = ["bpm", "dark", "density"];
 const numOf = (s) => (s !== undefined && s.trim() !== "" && Number.isFinite(Number(s)) ? Number(s) : null);
 
 export function parseNoise(args, known) {
@@ -20,11 +19,6 @@ export function parseNoise(args, known) {
     const n = numOf(rest[0]);
     return n !== null && n >= 0 && n <= 100 ? { type: "vol", vol: n / 100 } : err("usage: noise vol <0-100>");
   }
-  if (KNOBS.includes(head)) {
-    const n = numOf(rest[0]);
-    if (head === "bpm") return n !== null && n >= 40 && n <= 200 ? { type: "knob", knob: head, value: n } : err("bpm must be 40-200");
-    return n !== null && n >= 0 && n <= 1 ? { type: "knob", knob: head, value: n } : err(`${head} must be 0-1`);
-  }
   const isLayer = known.layers.includes(head);
   if (isLayer && rest.length) {
     const n = numOf(rest[0]);
@@ -32,7 +26,6 @@ export function parseNoise(args, known) {
     return n !== null && n > 0 && n <= 100 ? { type: "layer", id: head, vol: n / 100 } : err("layer volume must be 0-100");
   }
   if (known.presets.includes(head)) return { type: "preset", id: head };
-  if (known.genres.includes(head)) return { type: "genre", id: head };
   if (isLayer) return { type: "layer", id: head, vol: 0.5 };
   return err(`unknown: ${head}`);
 }

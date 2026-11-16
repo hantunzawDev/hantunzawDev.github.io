@@ -1627,7 +1627,7 @@ const loadNoise = () => (noiseP ??= import("./noise/ui.js").then((m) => { queueM
 function noiseSaved() {
   const src = store.get("noise.src", null), saved = store.get("noise", null);
   const hasLayers = saved && typeof saved.layers === "object" && saved.layers && Object.keys(saved.layers).length > 0;
-  return src === "music" || src === "radio" || !!hasLayers;
+  return src === "radio" || !!hasLayers;
 }
 // mini player on the focus/zen stage; it decides itself whether there is anything to show.
 // Entering focus/zen with a saved selection loads the module (silent: never autoplays).
@@ -2186,7 +2186,7 @@ const HELP = {
   fun:    "neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee",
   games:  "snake · type · guess · fps (bughunt)",
   ...(VIZ_ENABLED ? { audio: "viz [mic|sys|noise|off] · viz orb|terrain|pulsar" } : {}),
-  noise:  "noise (play/stop, alt+n) · noise <genre|preset> · noise <layer> [0-100] · noise off <layer> · noise bpm|dark|density|vol <n> · noise save <name> · noise list · radio [station|off] · sleep 30m|off",
+  noise:  "noise (play/stop, alt+n) · noise <sound> [0-100] · noise off <sound> · noise <preset> · noise vol <n> · noise save <name> · noise list · radio [station|off] · sleep 30m|off",
   art:    "art (what is playing) · art random · art <name> · more under config → home",
   bg:     `bg [off|ascii|audio|drift|grid|scan|glow] [focus|zen] · bg orb|terrain|pulsar · bg mic|sys|noise|off · [ ] cycle on stage`,
   system: "open|close|max <app> · ls · layout ls|save|load|rm|startup <name> · layout reset · config [general|look|windows|startup|links|quotes|data] · close all|others · reopen · tile [on|off|bento|master|hero|rebalance] · arrange · zones [app] · float [app] [on|off] · snap on|off · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
