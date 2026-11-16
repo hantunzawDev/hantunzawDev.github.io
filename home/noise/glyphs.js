@@ -94,12 +94,12 @@ export const GLYPH = {
   "metta2": '<circle cx="6" cy="2" r=".9"/><circle cx="9.200" cy="3.300" r=".9"/><circle cx="10" cy="6.500" r=".9"/><circle cx="8.700" cy="9.500" r=".9"/><circle cx="5.500" cy="10.300" r=".9"/><circle cx="2.800" cy="8.300" r=".9"/><circle cx="2.500" cy="4.800" r=".9"/><path d="M5.500 11l-.3 1M6.500 11.200l.3.800"/>',
   "monastery": '<path d="M1 4.500l4 1v4l-4 1z"/><path d="M5 5.500l3.500-3v8L5 9.500"/><path d="M10 4q1 2 0 4"/>',
 
-  // ---- brainwave
+  // ---- brainwave: periods rise δ→γ but stay readable at 12px (≥1.25px per half-period)
   "delta": `<path d="${wave(1, 11, 6, 3.500, 2)}"/>`,
-  "theta": `<path d="${wave(1, 11, 6, 3, 4)}"/>`,
-  "alpha": `<path d="${wave(1, 11, 6, 2.500, 6)}"/>`,
-  "beta": `<path d="${wave(1, 11, 6, 2, 10)}"/>`,
-  "gamma": `<path d="${wave(0.5, 11.5, 6, 1.500, 16)}"/>`,
+  "theta": `<path d="${wave(1, 11, 6, 3, 3)}"/>`,
+  "alpha": `<path d="${wave(1, 11, 6, 2.500, 4)}"/>`,
+  "beta": `<path d="${wave(1, 11, 6, 2, 6)}"/>`,
+  "gamma": `<path d="${wave(1, 11, 6, 1.500, 8)}"/>`,
   "iso": '<path d="M1 8.500h1.500v-5h2.500v5h2v-5h2.500v5H11"/>',
 };
 
