@@ -1618,7 +1618,7 @@ function mountViz() {
   return vizApp;
 }
 function unmountViz() { vizApp?.stop(); vizApp = null; }
-/* noise.app (its modules load on first open; Tone.js only when a genre plays) */
+/* noise.app (its modules load on first open; sounds are fetched when first selected) */
 let noiseP = null, noiseWanted = false;
 const loadNoise = () => (noiseP ??= import("./noise/ui.js").then((m) => { queueMicrotask(syncMini); return m.noiseUI; }, (e) => { noiseP = null; throw e; }));
 // A saved noise.app selection (genre / station / layers) from a past visit, read from
