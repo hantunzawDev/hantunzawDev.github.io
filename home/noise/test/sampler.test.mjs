@@ -4,7 +4,7 @@
 // together, so scheduling can be checked deterministically.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createSampler } from "../sampler.js";
+import { createSampler, defaultCacheCap } from "../sampler.js";
 import { loopPlan } from "../looper.js";
 
 // ---------------------------------------------------------------- fakes
@@ -91,8 +91,9 @@ const ROWS = {
   short: { id: "short", kind: "sample", src: "rec/short.mp3", trim: 1 },
   tone: { id: "tone", kind: "tone", trim: 1 },
 };
+for (const id of "abcde") ROWS[id] = { id, kind: "sample", src: `rec/${id}.mp3`, trim: 1 };
 
-function rig({ durs = { x: 30, y: 30, short: 1.2 }, missing = new Set(), hold = false } = {}) {
+function rig({ durs = { x: 30, y: 30, short: 1.2, a: 30, b: 30, c: 30, d: 30, e: 30 }, missing = new Set(), hold = false, cacheCap } = {}) {
   const ctx = fakeCtx(), clock = fakeClock(ctx), mix = ctx.node();
   const fetches = [];
   let release = null;
@@ -100,8 +101,8 @@ function rig({ durs = { x: 30, y: 30, short: 1.2 }, missing = new Set(), hold = 
   const fetchStub = async (url) => {
     const u = String(url);
     fetches.push(u);
-    if (gate) await gate;
     const id = u.split("/").pop().replace(".mp3", "");
+    if (gate && (hold === true || hold.has(id))) await gate;
     if (missing.has(id)) return { ok: false, status: 404, arrayBuffer: async () => { throw new Error("no body"); } };
     return { ok: true, status: 200, arrayBuffer: async () => ({ dur: durs[id] }) };
   };
@@ -121,6 +122,7 @@ function rig({ durs = { x: 30, y: 30, short: 1.2 }, missing = new Set(), hold = 
     timers: clock,
     now: clock.now,
     random: () => 0,
+    ...(cacheCap ? { cacheCap } : {}),
   });
   s.source.init(ctx, mix);
   s.source.start();
@@ -285,4 +287,107 @@ test("selection survives engine stop/start; nothing live while inactive", async 
   await flush(); await flush();
   assert.deepEqual(L.liveCount(), { x: 1, tone: 1 });
   assert.equal(r.fetches.length, 1, "decoded buffer is cached per context");
+});
+
+// ---------------------------------------------------------------- memory
+
+// a 30 s stereo fake buffer decodes to 30 * 48000 * 2 * 4 = 11.52 MB
+const BUF30 = 30 * 48000 * 2 * 4;
+const settle = async (clock, ms = 1000) => { for (let i = 0; i < 4; i++) await flush(); clock.advance(ms); await flush(); };
+const names = (s) => s._cached().map((u) => u.split("/").pop().replace(".mp3", ""));
+
+test("default cache cap: 48 MB, 24 MB on low-memory or touch devices, safe in node", () => {
+  const cap = defaultCacheCap();
+  assert.ok(cap === 48 * 2 ** 20 || cap === 24 * 2 ** 20, String(cap));
+  const nav = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const mm = globalThis.matchMedia;
+  try {
+    Object.defineProperty(globalThis, "navigator", { value: { deviceMemory: 4 }, configurable: true });
+    assert.equal(defaultCacheCap(), 24 * 2 ** 20);
+    Object.defineProperty(globalThis, "navigator", { value: { deviceMemory: 8 }, configurable: true });
+    globalThis.matchMedia = () => ({ matches: true });
+    assert.equal(defaultCacheCap(), 24 * 2 ** 20);
+    globalThis.matchMedia = () => ({ matches: false });
+    assert.equal(defaultCacheCap(), 48 * 2 ** 20);
+    globalThis.matchMedia = () => { throw new Error("boom"); };
+    assert.equal(defaultCacheCap(), 48 * 2 ** 20);
+  } finally {
+    if (nav) Object.defineProperty(globalThis, "navigator", nav); else delete globalThis.navigator;
+    if (mm) globalThis.matchMedia = mm; else delete globalThis.matchMedia;
+  }
+});
+
+test("eviction drops unselected buffers oldest-first, never wanted ones", async () => {
+  const { L, s, clock, fetches } = rig({ cacheCap: 2.5 * BUF30 });
+  L.set("a", 0.5); L.set("b", 0.5); L.set("c", 0.5);
+  await settle(clock);
+  assert.deepEqual(names(s), ["a", "b", "c"], "selected buffers may exceed the cap");
+  L.off("a"); L.off("b");
+  await settle(clock);
+  assert.deepEqual(names(s), ["b", "c"], "a (oldest unselected) went first; back under the cap");
+  L.set("d", 0.5);
+  await settle(clock);
+  assert.deepEqual(names(s), ["c", "d"], "loading d pushed b out; wanted c and d stay");
+  L.set("a", 0.5);
+  await settle(clock);
+  assert.equal(fetches.filter((u) => u.endsWith("/a.mp3")).length, 2, "an evicted sound refetches");
+  assert.equal(L.status("a"), "playing");
+  assert.deepEqual(names(s), ["c", "d", "a"], "all three wanted: none evicted");
+});
+
+test("eviction recency: re-requesting a buffer makes it the newest", async () => {
+  const { L, s, clock } = rig({ cacheCap: 2.5 * BUF30 });
+  L.set("a", 0.5); L.set("b", 0.5);
+  await settle(clock);
+  L.off("a"); L.off("b"); await settle(clock);
+  L.set("a", 0.5); await settle(clock); L.off("a"); await settle(clock); // a used again after b
+  L.set("c", 0.5); await settle(clock);
+  assert.deepEqual(names(s), ["a", "c"], "b, the least recently requested, was dropped");
+});
+
+test("eviction never drops a fading or a still-loading sound", async () => {
+  const r = rig({ cacheCap: 1.5 * BUF30, hold: new Set(["c"]) });
+  const { L, s, clock } = r;
+  L.set("a", 0.5); L.set("b", 0.5);
+  await settle(clock);
+  L.set("c", 0.5);                 // c's fetch is held: loading
+  await flush();
+  assert.equal(L.status("c"), "loading");
+  L.off("a"); clock.advance(100);  // a is fading (disposal at 500 ms)
+  L.set("d", 0.5);
+  for (let i = 0; i < 4; i++) await flush(); // d decodes while a is still fading: over the cap
+  assert.ok(names(s).includes("a"), "fading a kept");
+  assert.ok(names(s).includes("b") && names(s).includes("d"), "wanted kept");
+  clock.advance(1000); await flush(); // a disposed: now evictable
+  assert.ok(!names(s).includes("a"), "a evicted once it stopped");
+  r.release(); await settle(clock);
+  assert.equal(L.status("c"), "playing", "the held load completed and was not dropped");
+  assert.ok(names(s).includes("c"));
+});
+
+test("a live instance keeps looping after its buffer leaves the cache", async () => {
+  const { L, s, ctx, clock, fetches } = rig({ durs: { short: 1.2 } });
+  L.set("short", 0.5);
+  await settle(clock, 400);
+  const before = ctx.sources.length;
+  s._dropCache();
+  assert.deepEqual(s._cached(), []);
+  clock.advance(5000); await flush();
+  assert.equal(L.status("short"), "playing");
+  assert.ok(ctx.sources.length > before + 4, "copies keep being scheduled from the instance's own buffer");
+  assert.ok(ctx.sources.every((x) => x.buffer && x.buffer.duration === 1.2));
+  assert.equal(fetches.length, 1, "no refetch while it plays");
+});
+
+test("an in-flight load is never evicted, even when nobody wants it any more", async () => {
+  const r = rig({ cacheCap: 1.5 * BUF30, hold: new Set(["c"]) });
+  const { L, s, clock, fetches } = r;
+  L.set("c", 0.5); await flush();          // held: loading
+  L.off("c"); clock.advance(1000);          // disposed while the fetch is still in flight
+  L.set("a", 0.5); L.set("b", 0.5);
+  await settle(clock);                      // over the cap: eviction runs with c pending
+  L.set("c", 0.5);                          // re-select: must join the same in-flight load
+  r.release(); await settle(clock);
+  assert.equal(fetches.filter((u) => u.endsWith("/c.mp3")).length, 1, "deduped onto the pending load");
+  assert.equal(L.status("c"), "playing");
 });

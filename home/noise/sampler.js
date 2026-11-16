@@ -33,7 +33,9 @@
 //   isActive() → engine is playing     timers { setTimeout, clearTimeout, setInterval, clearInterval }
 //   now() → ms (level smoothing)       random() → 0..1 (first-copy offset)
 // It returns { api, source }: `api` is the public layers surface, `source` the
-// engine.attachSource contract (init/start/has/stop). `_bus` is for tests.
+// engine.attachSource contract (init/start/has/stop). `cacheCap` (bytes,
+// default defaultCacheCap()) bounds decoded PCM. `_bus`, `_cached()` and
+// `_dropCache()` exist for tests only.
 import { loopPlan, fadeCurves } from "./looper.js";
 
 const TICK_MS = 200;
@@ -47,7 +49,21 @@ const EDGE_TC = 0.08;         // start / stop fade: 5τ = 0.4 s
 const DISPOSE_MS = 500;       // after the stop fade has landed
 const LEVEL_FFT = 256;
 const LEVEL_GAIN = 16;        // RMS → 0..1: a loudness-matched sound at vol 1 reads ~0.7 (measured on white-noise in Chrome)
-const CACHE_CAP = 256 * 2 ** 20; // decoded bytes kept for sounds no longer selected
+const MB = 2 ** 20;
+
+// Decoded-PCM budget for the whole cache. Only buffers nobody uses (not
+// selected, not fading out, not still loading) are evicted, least recently
+// requested first, so the selected mix may exceed it but browsing doesn't pile
+// up on top. Re-selecting an evicted sound refetches from the HTTP cache and
+// decodes again. Phones and low-memory devices get half.
+export function defaultCacheCap() {
+  try {
+    const nav = globalThis.navigator;
+    const lowMem = typeof nav?.deviceMemory === "number" && nav.deviceMemory <= 4;
+    const coarse = typeof globalThis.matchMedia === "function" && globalThis.matchMedia("(pointer: coarse)").matches;
+    return (lowMem || coarse ? 24 : 48) * MB;
+  } catch { return 48 * MB; }
+}
 
 const curves = fadeCurves();
 
@@ -55,6 +71,7 @@ export function createSampler({
   catalog, builders = {}, fetch, base,
   isActive = () => true, timers = globalThis,
   now = () => performance.now(), random = Math.random,
+  cacheCap = defaultCacheCap(),
 } = {}) {
   let ctx = null, bus = null, ticker = 0;
   const wanted = new Map();   // id → vol
@@ -84,7 +101,7 @@ export function createSampler({
   function load(L) {
     if (cacheCtx !== ctx) { cache = new Map(); cacheCtx = ctx; }
     let e = cache.get(L.src);
-    if (e) return e.p;
+    if (e) { cache.delete(L.src); cache.set(L.src, e); return e.p; } // most recently requested last
     const c = ctx;
     e = { p: null, buf: null, bytes: 0 };
     e.p = Promise.resolve()
@@ -97,6 +114,7 @@ export function createSampler({
       .then((buf) => {
         e.buf = buf;
         e.bytes = (buf.length || 0) * (buf.numberOfChannels || 1) * 4;
+        evict();
         return buf;
       }, (err) => {
         if (cache.get(L.src) === e) cache.delete(L.src);
@@ -106,16 +124,18 @@ export function createSampler({
     return e.p;
   }
 
-  // keep memory bounded: drop decoded buffers nobody has selected once over the cap
+  // keep memory bounded: over the cap, drop decoded buffers nobody uses, oldest
+  // request first. A live instance holds its own buffer reference, so eviction
+  // only stops the cache from handing that buffer out again.
   function evict() {
     let total = 0;
     for (const e of cache.values()) total += e.bytes;
-    if (total <= CACHE_CAP) return;
+    if (total <= cacheCap) return;
     const used = new Set();
     for (const id of wanted.keys()) { const L = catalog(id); if (L?.src) used.add(L.src); }
     for (const i of fading.values()) if (i.L.src) used.add(i.L.src);
     for (const [src, e] of cache) {
-      if (total <= CACHE_CAP) break;
+      if (total <= cacheCap) break;
       if (!e.buf || used.has(src)) continue;
       cache.delete(src); total -= e.bytes;
     }
@@ -345,5 +365,10 @@ export function createSampler({
     stop() { teardown(); },
   };
 
-  return { api, source, get _bus() { return bus; } };
+  return {
+    api, source,
+    get _bus() { return bus; },
+    _cached() { return [...cache].filter(([, e]) => e.buf).map(([src]) => src); }, // tests: decoded srcs, oldest first
+    _dropCache() { cache.clear(); },                                                // tests: simulate eviction of everything
+  };
 }
