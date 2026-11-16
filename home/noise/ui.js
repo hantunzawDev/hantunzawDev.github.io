@@ -1,10 +1,11 @@
 // noise.app window: compact header (transport, readout, spectrum), a controls row
 // (master volume, sleep timer), sounds / radio tabs. The sounds tab (rail, tiles,
-// now-mixing strip, presets) lives in ui-sounds.js, the focus/zen mini player in
-// ui-mini.js, the noise / radio / sleep commands in ui-cmd.js. This file owns the
-// state, persistence, transport, the radio panel and the one render loop.
+// now-mixing strip, presets) lives in ui-sounds.js, the radio tab (vibe rail, station
+// tiles) in ui-radio.js, the focus/zen mini player in ui-mini.js, the noise / radio /
+// sleep commands in ui-cmd.js. This file owns the state, persistence, transport and
+// the one render loop.
 //
-// Every live animation (header spectrum, tile glow, radio scope, mini player) runs
+// Every live animation (header spectrum, tile glow, mini player) runs
 // on ONE rAF that only ticks while something is really on screen (desktop mode,
 // window open, in view, tab visible; or the mini player on the focus/zen stage).
 //
@@ -12,7 +13,7 @@
 // listeners below keep it in step with the engine whether or not the window is
 // open, so commands and the mini player see the same state.
 import { store } from "../data.js";
-import { audio, waveF } from "../audio.js";
+import { audio } from "../audio.js";
 import { icon } from "../icons.js";
 import { engine } from "./engine.js";
 import { layers } from "./layers.js";
@@ -21,14 +22,15 @@ import { CATEGORIES, LAYERS, layerOf } from "./catalog.js";
 import { STATIONS, VIBES, stationById } from "./stations.js";
 import { PRESETS, sanitizeState } from "./presets.js";
 import { buildSounds } from "./ui-sounds.js";
+import { buildRadio } from "./ui-radio.js";
+import { reducedMotion, onMotionChange } from "./motion.js";
 import { createMini, readColors, drawSpectrum, spectrumState } from "./ui-mini.js";
 import { createCommands } from "./ui-cmd.js";
 
-const KNOWN = { layers: LAYERS.map((l) => l.id), stations: STATIONS.map((s) => s.id), cats: CATEGORIES.map((c) => c.id) };
+const KNOWN = { layers: LAYERS.map((l) => l.id), stations: STATIONS.map((s) => s.id), cats: CATEGORIES.map((c) => c.id), vibes: VIBES };
 const TABS = ["sounds", "radio"];
 const LIVE = ["playing", "paused", "fading"];
 const SLEEP = [0, 15, 30, 60, 90];
-const RM = matchMedia("(prefers-reduced-motion: reduce)");
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const nameOf = (id) => layerOf(id)?.name ?? id;
 const isLive = () => LIVE.includes(engine.state);
@@ -345,6 +347,25 @@ const soundsCtx = {
   },
 };
 
+const radioCtx = {
+  h,
+  vibe: () => state.vibe,
+  setVibe(id) { state.vibe = id; persist(); if (ui) render(); },
+  current: () => radio.current?.id ?? null,
+  status: () => radio.status,
+  engineState: () => engine.state,
+  analysed: () => radio.analysed,
+  nowPlaying: (st) => nowPlaying(st),
+  level: () => audio.level,
+  click: clickStation,
+};
+
+// open on the vibe of the saved / playing station, so it is in view
+function followStation() {
+  const st = state.station ? stationById(state.station) : null;
+  if (st && st.vibe !== state.vibe) state.vibe = st.vibe;
+}
+
 function build(root) {
   const R = {};
   R.root = root;
@@ -425,41 +446,15 @@ function build(root) {
     R.panels.set(t, p);
     return p;
   };
-  const soundsP = panel("sounds"), radioP = panel("radio");
+  const soundsP = panel("sounds"), radioTab = panel("radio");
   R.sounds = buildSounds(soundsCtx);
   soundsP.append(R.sounds.el);
-  radioP.tabIndex = 0;
-  buildRadio(R, radioP);
-  R.scroller = radioP;
+  R.radio = buildRadio(radioCtx);
+  radioTab.append(R.radio.el);
 
   R.live = h("p", { class: "sr-only", role: "status", "aria-live": "polite" });
-  root.append(head, ctl, tablist, h("div", { class: "nz-panels" }, soundsP, radioP), R.live);
+  root.append(head, ctl, tablist, h("div", { class: "nz-panels" }, soundsP, radioTab), R.live);
   return R;
-}
-
-function buildRadio(R, p) {
-  R.stations = new Map();
-  for (const v of VIBES) {
-    const list = h("ul", { class: "nz-stations" });
-    for (const st of STATIONS.filter((x) => x.vibe === v)) {
-      const tag = h("span", { class: "nz-st__tag" });
-      const btn = h("button", { type: "button", class: "nz-st__btn", "aria-pressed": "false", onclick: () => clickStation(st.id) },
-        h("span", { class: "nz-st__dot", "aria-hidden": "true" }),
-        h("span", { class: "nz-st__name", text: st.name }),
-        tag);
-      const li = h("li", { class: "nz-st", "data-id": st.id }, btn);
-      R.stations.set(st.id, { li, btn, tag });
-      list.append(li);
-    }
-    p.append(h("section", { class: "nz-group" },
-      h("h3", { class: "nz-cat nz-cat--sub" }, h("span", { class: "nz-cat__name", text: v }), h("span", { class: "nz-cat__rule", "aria-hidden": "true" }), h("span", { class: "nz-cat__count", text: String(STATIONS.filter((x) => x.vibe === v).length) })),
-      list));
-  }
-  // the live strip moves into whichever row is playing
-  R.scope = h("canvas", { class: "nz-scope", "aria-hidden": "true" });
-  R.np = h("span", { class: "nz-st__np" });
-  R.liveRow = h("div", { class: "nz-st__live" }, R.scope, R.np);
-  p.append(h("p", { class: "nz-hint", text: "internet radio · streams may drop · press a playing station to turn it off" }));
 }
 
 // ---------------------------------------------------------------- render
@@ -525,33 +520,8 @@ function render() {
   placeInk();
 
   R.sounds.render();
-  renderRadio(st, busy);
+  R.radio.render();
   renderMeta();
-}
-
-function renderRadio(st, busy) {
-  const R = ui;
-  for (const [id, S] of R.stations) {
-    const cur = pick === "radio" && state.station === id;
-    const playing = cur && busy;
-    S.li.classList.toggle("is-cur", cur);
-    S.li.classList.toggle("is-live", playing);
-    S.btn.setAttribute("aria-pressed", String(playing));
-    let tag = "", k = "";
-    if (cur && playing) {
-      if (radio.status === "error") { tag = "offline · retry"; k = "err"; }
-      else if (radio.status === "loading" || engine.state === "loading") { tag = "tuning…"; k = "load"; }
-      else if (radio.status === "playing" && !radio.analysed) { tag = "no viz"; k = "dim"; }
-      else { tag = "live"; k = "on"; }
-    } else if (cur) tag = "paused";
-    S.tag.textContent = tag;
-    S.tag.dataset.k = k;
-    S.li.dataset.k = cur ? k : "";
-    if (playing && R.liveRow.parentNode !== S.li) S.li.append(R.liveRow);
-  }
-  if (!(pick === "radio" && busy)) R.liveRow.remove();
-  const np = nowPlaying(st);
-  R.np.textContent = np ? `♪ ${np}` : radio.status === "error" ? "the stream did not answer · press it to retry" : !radio.analysed && radio.status === "playing" ? "this station can't be analysed, so no scope" : "";
 }
 
 // window title bar: also refreshed by the loop while a sleep timer counts down
@@ -573,8 +543,9 @@ function sleepText() {
 function selectTab(t, user) {
   if (!TABS.includes(t)) return;
   state.tab = t;
+  if (t === "radio") followStation();
   persist();
-  if (ui) { render(); if (user) ui.scroller.scrollTop = 0; wake(); }
+  if (ui) { render(); if (user) ui.root.querySelector(".nz-panel:not([hidden]) .nz-stage")?.scrollTo(0, 0); wake(); }
 }
 
 function placeInk() {
@@ -588,47 +559,6 @@ function placeInk() {
 
 let colors = null;
 const headSpec = spectrumState(28);
-
-function drawScope(playing) {
-  const cv = ui.scope;
-  if (!cv.isConnected) return;
-  const w = cv.clientWidth, hh = cv.clientHeight;
-  if (!w || !hh) return;
-  const dpr = Math.min(2, devicePixelRatio || 1);
-  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(hh * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(hh * dpr); }
-  const c = cv.getContext("2d");
-  c.setTransform(dpr, 0, 0, dpr, 0, 0);
-  c.clearRect(0, 0, w, hh);
-  const mid = hh / 2;
-  c.strokeStyle = colors.line; c.lineWidth = 1;
-  c.beginPath(); c.moveTo(0, mid + 0.5); c.lineTo(w, mid + 0.5); c.stroke();
-  for (let k = 1; k < 4; k++) { const x = Math.round((w * k) / 4) + 0.5; c.beginPath(); c.moveTo(x, mid - 2); c.lineTo(x, mid + 3); c.stroke(); }
-  if (!playing || radio.status !== "playing") return;
-  if (!radio.analysed) { // direct stream: nothing to read, draw a dashed "no signal" line
-    c.setLineDash([2, 4]); c.strokeStyle = colors.dim;
-    c.beginPath(); c.moveTo(0, mid + 0.5); c.lineTo(w, mid + 0.5); c.stroke(); c.setLineDash([]);
-    return;
-  }
-  const W = waveF, n = W.length, amp = mid - 2;
-  if (RM.matches) { // plain bars
-    c.fillStyle = colors.accent;
-    const bars = Math.floor(w / 4);
-    for (let i = 0; i < bars; i++) {
-      const bh = Math.max(1, Math.abs(W[Math.floor((i / bars) * n)]) * amp * 2);
-      c.fillRect(i * 4, mid - bh / 2, 2, bh);
-    }
-    return;
-  }
-  c.lineWidth = 1.4; c.lineJoin = "round"; c.strokeStyle = colors.accent;
-  if (colors.glow) { c.shadowColor = colors.accent; c.shadowBlur = 5; }
-  c.beginPath();
-  for (let i = 0; i < n; i++) {
-    const x = (i / (n - 1)) * w, y = mid - W[i] * amp * 1.6;
-    if (i) c.lineTo(x, y); else c.moveTo(x, y);
-  }
-  c.stroke();
-  c.shadowBlur = 0;
-}
 
 // ---------------------------------------------------------------- the one loop
 
@@ -647,14 +577,15 @@ function frame(now) {
   raf = requestAnimationFrame(frame);
   const playing = engine.state === "playing" || engine.state === "fading";
   // reduced motion, or nothing sounding (standby scanner): 10 fps is plenty
-  if ((RM.matches || !playing) && now - lastPaint < 100) return;
+  const plain = reducedMotion();
+  if ((plain || !playing) && now - lastPaint < 100) return;
   lastPaint = now;
   audio.read(now / 1000);
   if (mv) mini.draw(now, playing);
   if (!win) return;
   drawSpectrum(headSpec, ui.spec, colors, now, playing);
-  if (state.tab === "sounds") ui.sounds.frame(now, RM.matches);
-  else drawScope(playing && pick === "radio");
+  if (state.tab === "sounds") ui.sounds.frame(now, plain);
+  else ui.radio.frame(now, plain);
   if (now - lastPoll > 300) { // the sleep countdown has no event of its own: touch only its text
     lastPoll = now;
     if (engine.sleepLeft()) { sleepText(); renderMeta(); }
@@ -700,6 +631,7 @@ function mount(el) {
   ui.meta = ui.win.querySelector(".win__meta");
   ui.inView = true;
   seenStation = radio.current?.id ?? null;
+  if (state.tab === "radio") followStation();
   colors = readColors(ui.root);
 
   const onKey = (e) => {
@@ -708,7 +640,7 @@ function mount(el) {
     const typing = t instanceof HTMLElement && (t.isContentEditable || /^(TEXTAREA|SELECT)$/.test(t.tagName) || (t.tagName === "INPUT" && !["range", "checkbox", "radio", "button"].includes(t.type)));
     if (typing) return;
     // a focused control keeps its own space (activate a button, pick a radio/tab, nudge a slider)
-    if (t instanceof Element && t.closest("button, a[href], summary, [role=button], [role=radio], [role=tab], [role=slider], [role=checkbox], [role=switch]")) return;
+    if (t instanceof Element && t.closest("button, input, a[href], summary, [role=button], [role=radio], [role=tab], [role=slider], [role=checkbox], [role=switch]")) return;
     e.preventDefault(); toggle();
   };
   ui.win.addEventListener("keydown", onKey);
@@ -724,18 +656,17 @@ function mount(el) {
   io.observe(el);
   const ro = new ResizeObserver(() => { if (ui) placeInk(); });
   ro.observe(el);
-  const onRM = () => { if (ui) { render(); wake(); } };
-  RM.addEventListener("change", onRM);
+  const offRM = onMotionChange(() => { if (ui) { render(); wake(); } });
   cleanup = [
     () => ui?.win.removeEventListener("keydown", onKey),
     () => document.removeEventListener("visibilitychange", onVis),
     () => mo.disconnect(), () => io.disconnect(), () => ro.disconnect(),
-    () => RM.removeEventListener("change", onRM),
+    offRM,
   ];
 
   render();
-  if (window.gsap && !RM.matches) {
-    gsap.from(el.querySelectorAll(".nz-head, .nz-ctl, .nz-tabs, .nz-panel:not([hidden]) .nz-rail, .nz-panel:not([hidden]) .nz-stage, .nz-panel:not([hidden]) .nz-strip, .nz-panel:not([hidden]) .nz-group"),
+  if (window.gsap && !reducedMotion()) {
+    gsap.from(el.querySelectorAll(".nz-head, .nz-ctl, .nz-tabs, .nz-panel:not([hidden]) .nz-rail, .nz-panel:not([hidden]) .nz-stage, .nz-panel:not([hidden]) .nz-strip"),
       { opacity: 0, y: 6, duration: 0.32, stagger: 0.035, ease: "power2.out", clearProps: "opacity,transform" });
   }
   wake();
@@ -748,6 +679,7 @@ function unmount() {
   for (const fn of cleanup) fn();
   cleanup = [];
   ui.sounds.destroy();
+  ui.radio.destroy();
   ui.root.replaceChildren();
   ui.root.classList.remove("noise");
   if (ui.meta) ui.meta.textContent = "";

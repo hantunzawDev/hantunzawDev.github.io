@@ -991,6 +991,7 @@ body[data-theme="paper"] .win__body.noise { --nz-glow-c: transparent; --nz-hot-g
 .nz-status[data-k="load"] { color: var(--amber); }
 .nz-status[data-k="load"] .nz-status__led { background: none; border: 1px solid var(--amber); border-top-color: transparent; width: 8px; height: 8px; animation: nz-spin .9s linear infinite; }
 .nz-status[data-k="err"] { color: var(--red); }
+.nz-status[data-k="err"] .nz-status__text { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; line-height: 1.25; }
 .nz-status[data-k="err"] .nz-status__led { background: var(--red); border-radius: 0; }
 .nz-retry, .nz-tile__retry {
   flex: none; height: 20px; padding: 0 8px; border: 1px solid var(--red); background: var(--win); color: var(--red);
@@ -1051,9 +1052,7 @@ body[data-theme="paper"] .win__body.noise { --nz-glow-c: transparent; --nz-hot-g
 .nz-panels { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
 .nz-panel { flex: 1 1 0; min-height: 0; }
 .nz-panel[hidden] { display: none; }
-.nz-panel--radio { display: grid; align-content: start; gap: 14px; padding: 11px 14px 14px; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-hi) transparent; }
 .nz-panel:focus-visible { outline-offset: -2px; }
-.nz-group { display: grid; gap: 7px; }
 .nz-hint { font-size: 10px; color: var(--dim); }
 
 /* section heading: icon · name · fading rule · count */
@@ -1063,7 +1062,7 @@ body[data-theme="paper"] .win__body.noise { --nz-glow-c: transparent; --nz-hot-g
 .nz-cat--sub .nz-cat__name { color: var(--dim); }
 .nz-cat__rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
 .nz-cat__count { color: var(--dim); letter-spacing: .08em; font-variant-numeric: tabular-nums; }
-.nz-cat__count[data-on="true"], .nz-panel--radio .nz-cat__count { color: var(--lime); }
+.nz-cat__count[data-on="true"] { color: var(--lime); }
 
 /* sounds: rail | stage, strip pinned below */
 .nz-sounds { display: flex; flex-direction: column; height: 100%; min-height: 0; }
@@ -1230,6 +1229,10 @@ body[data-theme="paper"] .win__body.noise { --nz-glow-c: transparent; --nz-hot-g
 .nz-mix__mute:focus-visible, .nz-mix__x:focus-visible { outline-offset: -2px; }
 .nz-mix__ico { display: grid; color: var(--lime); }
 .nz-mix__name { white-space: nowrap; }
+.nz-mix__flag { font-family: var(--f-dot); font-weight: 900; font-size: 12px; line-height: 1; }
+.nz-mix__flag:empty { display: none; }
+.nz-mix[data-state="failed"] .nz-mix__flag { display: grid; place-items: center; width: 13px; height: 13px; font-family: inherit; font-size: 10px; font-weight: 700; color: var(--win); background: var(--red); }
+.nz-mix[data-state="loading"] .nz-mix__flag { color: var(--amber); }
 .nz-mix__lv { display: flex; align-items: flex-end; gap: 1px; height: 10px; }
 .nz-mix__lv i { width: 2px; height: 10px; background: var(--lime); transform-origin: 50% 100%; transform: scaleY(.3); opacity: .55; }
 .nz-mix[data-state="on"] .nz-mix__lv i { opacity: 1; }
@@ -1244,6 +1247,7 @@ body[data-theme="paper"] .win__body.noise { --nz-glow-c: transparent; --nz-hot-g
 .nz-mix[data-state="loading"] .nz-mix__ico { color: var(--amber); animation: nz-pulse .9s ease-in-out infinite; }
 .nz-mix[data-state="failed"] { border-color: var(--red); }
 .nz-mix[data-state="failed"] .nz-mix__ico { color: var(--red); }
+.nz-mix[data-state="failed"] .nz-mix__lv { display: none; }
 @media (hover: hover) {
   .nz-mix__mute:hover { background: color-mix(in srgb, var(--lime) 8%, transparent); }
   .nz-mix__x:hover { color: var(--red); background: color-mix(in srgb, var(--red) 10%, transparent); }
@@ -1265,34 +1269,21 @@ body[data-theme="paper"] .win__body.noise { --nz-glow-c: transparent; --nz-hot-g
 }
 @container nz (max-width: 440px) { @media (pointer: coarse) { .nz-strip__clear { width: 40px; } } }
 
-/* radio */
-.nz-stations { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.nz-st { border: 1px solid transparent; transition: border-color .15s ease-out, background-color .15s ease-out; }
-.nz-st.is-cur { border-color: var(--line-hi); background: var(--nz-tile-on); }
-.nz-st.is-live { border-color: var(--lime); }
-.nz-st[data-k="err"] { border-color: color-mix(in srgb, var(--red) 65%, transparent); }
-.nz-st__btn {
-  display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; min-height: 30px;
-  padding: 4px 8px; border: 0; background: none; color: var(--muted); text-align: left; cursor: pointer;
-}
-@media (pointer: coarse) { .nz-st__btn { min-height: 44px; } }
-.nz-st__btn:focus-visible { outline-offset: -2px; }
-@media (hover: hover) { .nz-st__btn:hover { color: var(--text); background: color-mix(in srgb, var(--lime) 6%, transparent); } }
-.nz-st__dot { justify-self: center; width: 7px; height: 7px; border: 1px solid var(--line-hi); border-radius: 50%; }
-.nz-st.is-live .nz-st__dot { background: var(--lime); border-color: var(--lime); box-shadow: var(--glow); animation: nz-pulse 1.6s ease-in-out infinite; }
-.nz-st[data-k="load"] .nz-st__dot { background: none; border-color: var(--amber); border-top-color: transparent; box-shadow: none; animation: nz-spin .9s linear infinite; }
-.nz-st[data-k="err"] .nz-st__dot { background: var(--red); border-color: var(--red); box-shadow: none; animation: none; }
-.nz-st__name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nz-st.is-cur .nz-st__name { color: var(--text); }
-.nz-st__tag { font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
-.nz-st__tag[data-k="on"] { color: var(--lime); text-shadow: var(--glow); }
-.nz-st__tag[data-k="load"] { color: var(--amber); }
-.nz-st__tag[data-k="err"] { color: var(--red); }
-.nz-st__tag[data-k="dim"] { padding: 0 4px; border: 1px dashed var(--line-hi); }
-.nz-st__live { display: grid; gap: 4px; padding: 0 8px 7px 30px; }
-.nz-scope { display: block; width: 100%; height: 26px; }
-.nz-st__np { font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nz-st__np:empty { display: none; }
+/* radio: the same tile with a taller face (two-line name, status line, now playing) */
+.nz-grid--st { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); }
+@container nz (max-width: 540px) { .nz-grid--st { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); } }
+.nz-tile--st { height: auto; min-height: 100px; display: grid; }
+.nz-tile--st .nz-tile__btn { position: relative; inset: auto; width: 100%; height: 100%; padding: 11px 10px 9px; gap: 6px; background: none; }
+.nz-tile--st .nz-tile__name { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.nz-tile__foot { display: grid; gap: 2px; width: 100%; margin-top: auto; padding-top: 2px; }
+.nz-tile--st .nz-tile__state { position: static; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
+.nz-tile__np { font-size: 9.5px; line-height: 1.25; letter-spacing: .02em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nz-tile__np:empty { display: none; }
+.nz-tile--st[data-state="on"] .nz-tile__state { color: var(--lime); text-shadow: var(--glow); }
+.nz-tile--st[data-state="paused"] { border-style: dashed; border-color: var(--line-hi); }
+.nz-tile--st[data-state="paused"] .nz-tile__name { color: var(--text); }
+.nz-tile--st .nz-tile__retry { top: 7px; right: 7px; bottom: auto; }
+.nz-tile--st[data-state="failed"] .nz-tile__name { padding-right: 46px; }
 
 /* reduced motion: static states only (no press scale, no rising slider, no spinners) */
 @media (prefers-reduced-motion: reduce) {
@@ -1384,8 +1375,11 @@ body[data-theme="paper"] .nz-mini {
   .nz-mini__info { width: auto; flex: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .noise *, .noise *::before, .noise *::after, .nz-mini *, .nz-mini *::before, .nz-mini *::after { animation: none !important; }
+  body:not(.motion-full) .noise *, body:not(.motion-full) .noise *::before, body:not(.motion-full) .noise *::after,
+  body:not(.motion-full) .nz-mini *, body:not(.motion-full) .nz-mini *::before, body:not(.motion-full) .nz-mini *::after { animation: none !important; }
 }
+body.motion-reduced .noise *, body.motion-reduced .noise *::before, body.motion-reduced .noise *::after,
+body.motion-reduced .nz-mini *, body.motion-reduced .nz-mini *::before, body.motion-reduced .nz-mini *::after { animation: none !important; }
 
 /* phones: the links menu would push the mode switch off the bar; links still open from the command line */
 @media (max-width: 520px) { .menu[data-menu="links"] { display: none; } }

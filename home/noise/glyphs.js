@@ -24,6 +24,14 @@ export const GLYPH = {
   "cat-myanmar": '<path d="M6 1v1.5M5 3.5h2M4.5 5h3M3.5 6.5h5M2.5 8.5h7v2h-7z"/><path d="M4.5 5L3.5 6.5M7.5 5l1 1.5M3.5 6.5L2.5 8.5M8.5 6.5l1 2"/>',
   "cat-brainwave": '<circle cx="6" cy="6" r="4.5"/><path d="M2.5 6q1.2-2.5 2.4 0t2.4 0 2.2 0"/>',
 
+  // ---- radio vibes
+  "vibe-myanmar": '<path d="M6 .5v2M5 3h2"/><path d="M6 3.5c1.6 0 2.2 1.600 2.500 3.500l1 2h-7l1-2C3.800 5.100 4.400 3.500 6 3.500z"/><path d="M2 9.500h8M1 11h10"/>',
+  "vibe-techno": '<path d="M1.500 4.500v3M3.500 2.500v7M5.500 5v2M7.500 1.500v9M9.500 3.500v5M11 5.500v1"/>',
+  "vibe-coding": '<path d="M4 2.500L1 6l3 3.500M8 2.500L11 6 8 9.500"/><rect x="5.500" y="4.500" width="1" height="3" class="f"/>',
+  "vibe-ambient": '<circle cx="6" cy="6" r="1" class="f"/><path d="M3.800 3.800a3.100 3.100 0 0 0 0 4.400M8.200 3.800a3.100 3.100 0 0 1 0 4.400M2 2a5.600 5.600 0 0 0 0 8M10 2a5.600 5.600 0 0 1 0 8"/>',
+  "vibe-lofi": '<path d="M2 8V6a4 4 0 0 1 8 0v2"/><rect x="1.500" y="7.500" width="2.500" height="3.500"/><rect x="8" y="7.500" width="2.500" height="3.500"/>',
+  "vibe-classical": '<path d="M6 4V.800M6 4c-1.800 0-2 1.200-1.200 2C3.600 6.800 3.500 8 4 9s1.600 1.500 2 1.500S7.600 10 8 9s.4-2.200-.8-3C8 5.200 7.800 4 6 4z"/><path d="M5 8h2M5.200 6.200v1M6.800 6.200v1"/>',
+
   // ---- rain
   "light-rain": `<path d="${CLOUD}"/><path d="M4.5 8.5v1M7.5 9v1"/>`,
   "heavy-rain": `<path d="${CLOUD}"/><path d="M3.5 8l-.5 2M5.5 8l-.5 2.5M7.5 8l-.5 2M9.5 8l-.5 2.5"/>`,

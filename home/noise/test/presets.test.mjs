@@ -27,7 +27,7 @@ test("presets", () => {
 });
 
 test("default state", () => {
-  assert.deepEqual(DEFAULT_STATE, { vol: 0.7, layers: {}, station: null, tab: "sounds", cat: "rain" });
+  assert.deepEqual(DEFAULT_STATE, { vol: 0.7, layers: {}, station: null, tab: "sounds", cat: "rain", vibe: "myanmar" });
 });
 
 test("sanitize: garbage falls back", () => {
@@ -39,19 +39,21 @@ test("sanitize: garbage falls back", () => {
 
 test("sanitize: station, tab, cat, vol", () => {
   const s = sanitizeState({ station: "soma-defcon", tab: "radio", cat: "nature", vol: 5 }, known);
-  assert.deepEqual(s, { vol: 1, layers: {}, station: "soma-defcon", tab: "radio", cat: "nature" });
+  assert.deepEqual(s, { vol: 1, layers: {}, station: "soma-defcon", tab: "radio", cat: "nature", vibe: "myanmar" });
   const bad = sanitizeState({ station: "gone", tab: "zzz", cat: "zzz" }, known);
   assert.equal(bad.station, null);
   assert.equal(bad.tab, "sounds");
   assert.equal(bad.cat, "rain");
   assert.deepEqual(sanitizeState({ layers: { "light-rain": 0 } }, known).layers, {});
+  assert.equal(sanitizeState({ vibe: "lofi" }, known).vibe, "lofi");
+  assert.equal(sanitizeState({ vibe: "zzz" }, known).vibe, "myanmar");
   assert.equal(sanitizeState({ cat: "nature" }, { layers: [], stations: [] }).cat, "nature"); // cats default to CATEGORIES
 });
 
 test("sanitize: old saved state migrates silently", () => {
   const old = { vol: 0.5, genre: "techno", knobs: { bpm: 130, dark: 0.4, density: 0.5 }, layers: { rooster: 0.5, rain: 0.4, brown: 0.3 }, station: "soma-defcon", tab: "music" };
   const out = sanitizeState(old, known);
-  assert.deepEqual(out, { vol: 0.5, layers: {}, station: "soma-defcon", tab: "sounds", cat: "rain" });
+  assert.deepEqual(out, { vol: 0.5, layers: {}, station: "soma-defcon", tab: "sounds", cat: "rain", vibe: "myanmar" });
   assert.ok(!("genre" in out) && !("knobs" in out));
   // an old id that still exists in the catalogue is kept
   const mixed = sanitizeState({ ...old, layers: { rooster: 0.5, cafe: 0.4, wind: 0.2 } }, known);

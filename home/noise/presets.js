@@ -1,5 +1,6 @@
 // Presets, default state and the persisted-state sanitiser: pure.
 import { CATEGORIES } from "./catalog.js";
+import { VIBES } from "./stations.js";
 
 export const PRESETS = [
   { id: "deep-work", name: "deep work", layers: { "brown-noise": 0.35, alpha: 0.15 } },
@@ -14,7 +15,7 @@ export const PRESETS = [
   { id: "focus-rain", name: "focus rain", layers: { "rain-on-window": 0.5, "pink-noise": 0.12, alpha: 0.12 } },
 ];
 
-export const DEFAULT_STATE = { vol: 0.7, layers: {}, station: null, tab: "sounds", cat: "rain" };
+export const DEFAULT_STATE = { vol: 0.7, layers: {}, station: null, tab: "sounds", cat: "rain", vibe: "myanmar" };
 
 const TABS = ["sounds", "radio"];
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -35,11 +36,13 @@ export function sanitizeState(raw, known) {
     }
   }
   const cats = (known && known.cats) || CATEGORIES.map((c) => c.id || c);
+  const vibes = (known && known.vibes) || VIBES;
   return {
     vol: v === null ? D.vol : clamp(v, 0, 1),
     layers,
     station: known && known.stations && known.stations.includes(r.station) ? r.station : null,
     tab: r.tab === "music" ? "sounds" : TABS.includes(r.tab) ? r.tab : D.tab,
     cat: cats.includes(r.cat) ? r.cat : D.cat,
+    vibe: vibes.includes(r.vibe) ? r.vibe : D.vibe,
   };
 }
