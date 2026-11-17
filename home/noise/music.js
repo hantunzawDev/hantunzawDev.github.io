@@ -1,3 +1,7 @@
+// NOT part of noise.app any more: this module, ./patterns.js and ./genres/ now serve
+// only the bughunt soundtrack in ../fpsaudio.js (game.exe), which imports them directly.
+// radio.js touches music.exclusive only so radio and a playing game score stop each other.
+//
 // noise.app music: lazy Tone.js loader, the 16-step sequencer, genre crossfades
 // and knobs. Instruments live in ./genres/*.js (one build() per genre).
 //

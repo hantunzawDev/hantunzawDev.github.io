@@ -18,7 +18,7 @@ Drag a window by its title bar, resize it from the bottom-right corner, and doub
 | `fortune` | A quote picked for the time and day, with a hint like "morning · monday". `again` picks another. |
 | `feed.rss` | Hacker News, DEV, GitHub (top new repos this week) and Wikipedia news |
 | `viz.app` | Three.js audio visualizer (orb / terrain / pulsar). **Parked for now** — flip `VIZ_ENABLED` in `os.js` to bring it back. File kept at `viz.js`. |
-| `noise.app` | Noise machine and music: 23 ambient layers (colored noise, rain, café, binaural beats…), nine generated genres from lofi to dark techno, internet radio, presets and a sleep timer. In focus and zen a small player sits at the bottom of the stage. Closed until you open it. |
+| `noise.app` | Ambient sound mixer and internet radio: 58 sounds in 10 categories (rain, nature, café and city, noise colors, binaural beats…) with a category rail, presets and a sleep timer, plus radio stations in vibe groups including a Myanmar group (Padamyar FM, Cherry FM, Mandalay FM, DVB Digital, DWG Radio Burmese, Radio Voice of Burma). Most sounds are recorded clips from [Moodist](https://github.com/remvze/moodist) (MIT code; sounds under the Pixabay Content License or CC0, with redistribution not clearly covered, see [`noise/rec/CREDITS.md`](noise/rec/CREDITS.md)), fetched when first selected. In focus and zen a small player sits at the bottom of the stage. Closed until you open it. The generated music genres (`noise/music.js`, `patterns.js`, `genres/`) no longer belong to noise.app: they only score the bughunt game. |
 | `game.exe` | Snake, a typing test and bughunt (a small raycasting shooter) |
 | `config.ini` | Name, fallback city, 12h/24h clock, theme, quotes, links |
 
@@ -67,7 +67,7 @@ tools   = <math> · pass [len] · uuid · b64 <text> · unb64 <text> · g|yt|ddg
 quotes  quote [now] · quote add <text> -- <author> @tags · quote ls · quote rm <n> · quote rotate visit|30m|hourly|daily · quote pack <name> on|off · quote match on|off · quote tags
 fun     neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee
 games   snake · type · guess · fps
-noise   noise (play/stop, alt+n) · noise <genre|preset> · noise <layer> [0-100] · noise off <layer> · noise bpm|dark|density|vol <n> · noise save <name> · noise list · radio [station|off] · sleep 30m|off
+noise   noise (play/stop, alt+n) · noise <sound> [0-100] · noise off <sound> · noise <preset> · noise vol <n> · noise save <name> · noise list · radio [station|off] · sleep 30m|off
 bg      bg [off|ascii|audio|drift|grid|scan|glow] [focus|zen] · bg orb|terrain|pulsar · bg mic|sys|noise|off · [ ] cycle on stage
 system  open|close|max <app> · ls · layout reset · theme <name> · name|city <x> · 12h|24h · history · clear
 ```
@@ -78,9 +78,10 @@ system  open|close|max <app> · ls · layout reset · theme <name> · name|city 
 - `matrix` runs until you press a key or click.
 - `bg ascii` (focus or zen) shows the same animated ASCII art as home behind the stage; desktop stops it. `bg noise` drives the audio backdrop from whatever noise.app is playing.
 - `quote now` shows the current quote and why it was picked.
-- `noise night-coding` plays a preset; `noise rain 60` adds rain at 60%; `noise list` shows every genre, layer and preset. Nothing plays until you ask, and your last mix comes back (silent) on reload.
-- `noise cafe` plays the café preset; `noise cafe 50` adds just the café layer at 50% (a name that is both a preset and a layer is the preset unless you give a volume). `noise rain 0` is the same as `noise off rain`.
+- `noise deep-work` plays a preset; `noise light-rain 60` adds light rain at 60%; `noise list` shows every sound and preset. Nothing plays until you ask, and your last mix comes back (silent) on reload.
+- `noise cafe` plays the café preset; `noise cafe 50` adds just the café layer at 50% (a name that is both a preset and a layer is the preset unless you give a volume). `noise light-rain 0` is the same as `noise off light-rain`.
 - `sleep 30m` fades the sound out over the last minute, then stops. `alt+n` plays or stops from anywhere.
+- `radio` lists stations; `radio <station>` tunes in and `radio off` stops.
 - `viz` is parked: the command prints `viz.app is parked for now.` Flip `VIZ_ENABLED` in `os.js` to restore the visualizer.
 
 ## Make it your browser's home page
