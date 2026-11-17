@@ -12,9 +12,9 @@ Moodist itself is MIT-licensed code; its sounds are third-party (per upstream: P
 
 Moodist (remvze) https://github.com/remvze/moodist, commit `11c0be2200116a3635880d600fd6953899cc51a3`, `public/sounds/`.
 
-## Owner recordings (not from Moodist)
+## Supplied by the site owner (not from Moodist)
 
-- `myittar-poe.mp3`, `chant-of-metta.mp3`, `mahapatthana.mp3`: the site owner's own recordings.
+- `myittar-poe.mp3`, `chant-of-metta.mp3`, `mahapatthana.mp3`: supplied by the site owner (already in the repo before this revamp, not from Moodist).
 
 ## Files
 

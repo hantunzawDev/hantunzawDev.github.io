@@ -88,7 +88,7 @@ Moodist itself is MIT-licensed code; its sounds are third-party (per upstream: P
 
 MD
 echo "Moodist (remvze) https://github.com/$REPO, commit \`$COMMIT\`, \`public/sounds/\`."
-printf '\n## Owner recordings (not from Moodist)\n\n- `myittar-poe.mp3`, `chant-of-metta.mp3`, `mahapatthana.mp3`: the site owner'"'"'s own recordings.\n\n## Files\n\n'
+printf '\n## Supplied by the site owner (not from Moodist)\n\n- `myittar-poe.mp3`, `chant-of-metta.mp3`, `mahapatthana.mp3`: supplied by the site owner (already in the repo before this revamp, not from Moodist).\n\n## Files\n\n'
 while IFS="$(printf '\t')" read -r i c p d t; do
   echo "- \`rec/$c/$i.mp3\`: Moodist (remvze) \`public/sounds/$p\`, upstream licence Pixabay Content License or CC0."
 done < "$ROWS"

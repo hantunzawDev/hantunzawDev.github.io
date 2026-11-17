@@ -2,7 +2,8 @@
 // Sample rows were generated once from rec/manifest.json (id, category, file,
 // dur, trim) and then hand-curated (names, icons). `src` is relative to this
 // file. `trim` is a loudness-matching gain, `dur` seconds. `icon` is a key in
-// glyphs.js. The three myanmar rows are the owner's own recordings.
+// glyphs.js. The three myanmar rows are files supplied by the site owner
+// (in the repo before this revamp, not from Moodist).
 export const CARRIER_HZ = 200;
 export const BRAINWAVE = { delta: 2, theta: 6, alpha: 10, beta: 18, gamma: 40 };
 
