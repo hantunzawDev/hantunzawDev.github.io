@@ -2,8 +2,12 @@
 // Sample rows were generated once from rec/manifest.json (id, category, file,
 // dur, trim) and then hand-curated (names, icons). `src` is relative to this
 // file. `trim` is a loudness-matching gain, `dur` seconds. `icon` is a key in
-// glyphs.js. The three myanmar rows are files supplied by the site owner
-// (in the repo before this revamp, not from Moodist).
+// glyphs.js. Optional `fade` (seconds, default 1.5 in sampler.js) is the loop
+// crossfade, set only for a steady rhythm: `dur - fade` is a whole number of
+// beats, so the next copy's beats land on the outgoing ones (clock: ticks every
+// 1.0 s, tick/tock pairs every 2 s, 15.94 - 1.94 = 14.00 s = 7 pairs).
+// The three myanmar rows are files supplied by the site owner (in the repo
+// before this revamp, not from Moodist).
 export const CARRIER_HZ = 200;
 export const BRAINWAVE = { delta: 2, theta: 6, alpha: 10, beta: 18, gamma: 40 };
 
@@ -61,7 +65,7 @@ export const LAYERS = [
   { id: "restaurant", group: "places", name: "restaurant", icon: "restaurant", kind: "sample", src: "rec/places/restaurant.mp3", trim: 2.291, dur: 170.89 },
   { id: "subway-station", group: "places", name: "subway", icon: "subway-station", kind: "sample", src: "rec/places/subway-station.mp3", trim: 2.239, dur: 171.03 },
   { id: "keyboard", group: "things", name: "keyboard", icon: "keyboard", kind: "sample", src: "rec/things/keyboard.mp3", trim: 0.653, dur: 12.15 },
-  { id: "clock", group: "things", name: "clock", icon: "clock", kind: "sample", src: "rec/things/clock.mp3", trim: 5.129, dur: 15.94 },
+  { id: "clock", group: "things", name: "clock", icon: "clock", kind: "sample", src: "rec/things/clock.mp3", trim: 5.129, dur: 15.94, fade: 1.94 },
   { id: "ceiling-fan", group: "things", name: "ceiling fan", icon: "ceiling-fan", kind: "sample", src: "rec/things/ceiling-fan.mp3", trim: 6, dur: 15.59 },
   { id: "vinyl-effect", group: "things", name: "vinyl", icon: "vinyl-effect", kind: "sample", src: "rec/things/vinyl-effect.mp3", trim: 6, dur: 65.9 },
   { id: "singing-bowl", group: "things", name: "singing bowl", icon: "singing-bowl", kind: "sample", src: "rec/things/singing-bowl.mp3", trim: 0.412, dur: 49.08 },

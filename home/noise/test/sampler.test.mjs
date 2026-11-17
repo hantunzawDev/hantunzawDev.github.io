@@ -46,7 +46,18 @@ function fakeCtx() {
     });
     ctx.sources.push(s); return s;
   };
-  ctx.decodeAudioData = async (ab) => ({ duration: ab.dur, length: Math.round(ab.dur * 48000), numberOfChannels: 2, sampleRate: 48000 });
+  // fake AudioBuffers carry no samples: getChannelData(ch) is a view whose
+  // subarray(a, b) reports the frames it would copy, copyToChannel records them
+  const fakeBuf = (length, numberOfChannels, sampleRate) => {
+    const b = {
+      length, numberOfChannels, sampleRate, duration: length / sampleRate, copied: [],
+      getChannelData: () => ({ subarray: (a, z) => ({ length: Math.min(z, length) - a }) }),
+      copyToChannel(src, ch) { b.copied.push([ch, src.length]); },
+    };
+    return b;
+  };
+  ctx.createBuffer = (ch, len, sr) => fakeBuf(len, ch, sr);
+  ctx.decodeAudioData = async (ab) => fakeBuf(Math.round(ab.dur * 48000), 2, 48000);
   // sources still sounding at the current time
   ctx.playing = () => ctx.sources.filter((s) => s.startAt !== null && s.stopAt > ctx.currentTime);
   return ctx;
@@ -90,10 +101,13 @@ const ROWS = {
   y: { id: "y", kind: "sample", src: "rec/y.mp3", trim: 1 },
   short: { id: "short", kind: "sample", src: "rec/short.mp3", trim: 1 },
   tone: { id: "tone", kind: "tone", trim: 1 },
+  beat: { id: "beat", kind: "sample", src: "rec/beat.mp3", trim: 1, fade: 0.94 },
+  long: { id: "long", kind: "sample", src: "rec/long.mp3", trim: 1 },
+  mid: { id: "mid", kind: "sample", src: "rec/mid.mp3", trim: 1 },
 };
 for (const id of "abcde") ROWS[id] = { id, kind: "sample", src: `rec/${id}.mp3`, trim: 1 };
 
-function rig({ durs = { x: 30, y: 30, short: 1.2, a: 30, b: 30, c: 30, d: 30, e: 30 }, missing = new Set(), hold = false, cacheCap } = {}) {
+function rig({ durs = { x: 30, y: 30, short: 1.2, a: 30, b: 30, c: 30, d: 30, e: 30, beat: 15.94, long: 120, mid: 70 }, missing = new Set(), hold = false, cacheCap } = {}) {
   const ctx = fakeCtx(), clock = fakeClock(ctx), mix = ctx.node();
   const fetches = [];
   let release = null;
@@ -390,4 +404,25 @@ test("an in-flight load is never evicted, even when nobody wants it any more", a
   r.release(); await settle(clock);
   assert.equal(fetches.filter((u) => u.endsWith("/c.mp3")).length, 1, "deduped onto the pending load");
   assert.equal(L.status("c"), "playing");
+});
+
+// ---------------------------------------------------------------- loop timing
+
+const startsOf = (ctx) => ctx.sources.map((x) => x.startAt).sort((a, b) => a - b);
+
+test("a row's own fade sets the copy gap: second copy at dur - fade", async () => {
+  const { L, ctx, clock } = rig();
+  L.set("beat", 0.5);
+  await settle(clock, 14500);  // past the point where the second copy must be queued
+  const st = startsOf(ctx);
+  assert.ok(st.length >= 2, `queued ${st.length}`);
+  assert.ok(Math.abs(st[1] - st[0] - (15.94 - 0.94)) < 1e-6, `second at +${st[1] - st[0]}`);
+  const first = ctx.sources.find((x) => x.startAt === st[0]);
+  assert.ok(Math.abs(first.stopAt - (st[1] + 0.94)) < 1e-6, "overlap is the row's fade");
+  // a row without `fade` keeps the default 1.5 s
+  const r2 = rig();
+  r2.L.set("x", 0.5);
+  await settle(r2.clock, 28000);
+  const s2 = startsOf(r2.ctx);
+  assert.ok(Math.abs(s2[1] - s2[0] - (30 - 1.5)) < 1e-6, `default gap ${s2[1] - s2[0]}`);
 });

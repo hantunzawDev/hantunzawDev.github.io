@@ -47,6 +47,18 @@ test("samples have existing src matching the manifest, sane trim", () => {
   assert.equal(Object.keys(manifest).length, LAYERS.filter((l) => manifest[l.id]).length);
 });
 
+test("optional loop fade is a number in (0, dur/3]", () => {
+  for (const l of LAYERS.filter((l) => "fade" in l)) {
+    assert.equal(typeof l.fade, "number", l.id);
+    assert.ok(l.kind === "sample" && typeof l.dur === "number", `${l.id} needs a sample dur`);
+    assert.ok(l.fade > 0 && l.fade <= l.dur / 3, `${l.id} fade ${l.fade}`);
+  }
+  // clock ticks every 1.0 s in tick/tock pairs: the next copy starts a whole number of pairs later
+  const c = layerOf("clock");
+  const gap = c.dur - c.fade;
+  assert.ok(Math.abs(gap - 2 * Math.round(gap / 2)) < 0.03, `clock copy gap ${gap}`);
+});
+
 test("myanmar group", () => {
   const m = byGroup("myanmar");
   assert.deepEqual(m.map((l) => l.id), ["metta", "metta2", "monastery"]);

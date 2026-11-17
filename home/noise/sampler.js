@@ -13,7 +13,9 @@
 // equal-power curve, each with its own envelope gain. Copies are queued from a
 // 200 ms ticker up to HORIZON seconds ahead of ctx.currentTime, so a throttled
 // background tab keeps time. Buffers under NATIVE_BELOW seconds use loop=true.
-// The first copy starts at a random offset so two beds never phase-lock.
+// The first copy starts at a random offset so two beds never phase-lock. A
+// catalogue row may set its own `fade` (seconds) where the recording has a
+// steady rhythm, so the copies' beats land on each other.
 //
 // Builders (tones, the three streamed Myanmar recordings) are `(h, t0) => ...`
 // functions wired into the small toolbox below; they sound immediately.
@@ -40,7 +42,7 @@ import { loopPlan, fadeCurves } from "./looper.js";
 
 const TICK_MS = 200;
 const HORIZON = 1.5;          // seconds of copies queued ahead of ctx.currentTime
-const LOOP_FADE = 1.5;        // wanted crossfade; loopPlan clamps short files to d/3
+const LOOP_FADE = 1.5;        // wanted crossfade (a row's `fade` overrides); loopPlan clamps short files to d/3
 const NATIVE_BELOW = 0.25;    // shorter than this: plain loop=true
 const LEAD = 0.03;            // first copy starts this far ahead (lets the graph settle)
 const MICRO = 0.02;           // first copy's own tiny fade-in (no click at a random offset)
@@ -180,7 +182,7 @@ export function createSampler({
       s.connect(inst.gain); s.start(t0);
       inst.srcs.push({ s, env: null });
     } else {
-      inst.plan = loopPlan(d, LOOP_FADE);
+      inst.plan = loopPlan(d, inst.L.fade ?? LOOP_FADE);
       copy(inst, t0, random() * Math.max(0, d - 2 * inst.plan.fade), true);
       pump(inst, ctx.currentTime);
       ensureTicker();
