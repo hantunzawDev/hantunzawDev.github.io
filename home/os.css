@@ -1244,6 +1244,9 @@ body[data-theme="paper"] .win__body.noise { --nz-glow-c: transparent; --nz-hot-g
 .nz-mix[data-state="failed"] .nz-mix__flag { display: grid; place-items: center; width: 13px; height: 13px; font-family: inherit; font-size: 10px; font-weight: 700; color: var(--win); background: var(--red); }
 .nz-mix[data-state="loading"] .nz-mix__flag { color: var(--amber); }
 .nz-mix__lv { display: flex; align-items: flex-end; gap: 1px; height: 10px; }
+/* the meter only means something while sound comes out: stopped or paused, it
+   would sit at its floor and read like the loading "…" mark */
+.noise:not([data-state="playing"]):not([data-state="fading"]) .nz-mix__lv { display: none; }
 .nz-mix__lv i { width: 2px; height: 10px; background: var(--lime); transform-origin: 50% 100%; transform: scaleY(.3); opacity: .55; }
 .nz-mix[data-state="on"] .nz-mix__lv i { opacity: 1; }
 .nz-mix[data-state="on"] .nz-mix__lv i:nth-child(1) { transform: scaleY(clamp(.3, calc(var(--lv) * .8), 1)); }
@@ -1276,8 +1279,17 @@ body[data-theme="paper"] .win__body.noise { --nz-glow-c: transparent; --nz-hot-g
   .nz-strip[data-empty="true"] .nz-strip__lab > span:first-child { display: inline; }
   .nz-strip__clear span { display: none; }
   .nz-strip__clear { width: 28px; padding: 0; justify-content: center; }
+  /* chips wrap instead of scrolling sideways: two rows show, more scroll inside */
+  .nz-strip__list {
+    --nz-chip-h: 28px;
+    flex-wrap: wrap; align-content: flex-start; max-height: calc(2 * var(--nz-chip-h) + 4px + 4px);
+    overflow: hidden auto; scrollbar-width: thin; scrollbar-color: var(--line-hi) transparent; mask-image: none;
+  }
+  .nz-mix { max-width: 100%; min-width: 0; }
+  .nz-mix__mute { min-width: 0; }
+  .nz-mix__name { overflow: hidden; text-overflow: ellipsis; }
 }
-@container nz (max-width: 440px) { @media (pointer: coarse) { .nz-strip__clear { width: 40px; } } }
+@container nz (max-width: 440px) { @media (pointer: coarse) { .nz-strip__clear { width: 40px; } .nz-strip__list { --nz-chip-h: 42px; } } }
 
 /* radio: the same tile with a taller face (two-line name, status line, now playing) */
 .nz-grid--st { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); }
