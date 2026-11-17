@@ -1098,21 +1098,31 @@ body[data-theme="paper"] .win__body.noise { --nz-glow-c: transparent; --nz-hot-g
 }
 .nz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 6px; }
 
-/* narrow windows: the rail becomes a horizontal scroller above the grid */
+/* narrow windows: the rail wraps into a row of chips above the grid (at most two
+   rows, nothing hidden off to the side). Only the selected chip spells out its
+   name; the others are icon + count, their name kept for AT (sr-only clip) and
+   for the pointer (title). */
 @container nz (max-width: 540px) {
   .nz-browse { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .nz-rail {
-    flex-direction: row; gap: 4px; padding: 8px 12px; overflow-x: auto; overflow-y: hidden;
-    border-right: 0; border-bottom: 1px solid var(--line); scroll-padding-inline: 12px;
-    mask-image: linear-gradient(90deg, transparent, #000 10px, #000 calc(100% - 18px), transparent);
+    flex-direction: row; flex-wrap: wrap; gap: 4px; padding: 8px 12px; overflow: visible;
+    border-right: 0; border-bottom: 1px solid var(--line);
   }
-  .nz-rail__tab { grid-template-columns: 12px auto auto; gap: 6px; min-height: 28px; padding: 0 9px; border: 1px solid var(--line); }
+  .nz-rail__tab {
+    grid-template-columns: none; grid-auto-flow: column; justify-content: center; gap: 6px;
+    min-width: 28px; min-height: 28px; padding: 0 8px; border: 1px solid var(--line);
+  }
+  .nz-rail__tab:not([aria-selected="true"]) { padding: 0 7px; }
+  .nz-rail__tab:not([aria-selected="true"]) .nz-rail__name {
+    position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+  }
+  .nz-rail__tab:not([aria-selected="true"]) .nz-rail__n { min-width: 14px; padding: 0 3px; }
   .nz-rail__tab[aria-selected="true"] { border-color: var(--line-hi); }
   .nz-rail__tab::after { top: auto; left: -1px; right: -1px; bottom: -1px; width: auto; height: 2px; }
   .nz-stage { padding: 10px 12px 12px; }
   .nz-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
 }
-@container nz (max-width: 540px) { @media (pointer: coarse) { .nz-rail__tab { min-height: 40px; } } }
+@container nz (max-width: 540px) { @media (pointer: coarse) { .nz-rail__tab { min-width: 44px; min-height: 44px; } } }
 
 /* sound tile: one big toggle; the volume slider rises into the reserved bottom row when on */
 .nz-tile {

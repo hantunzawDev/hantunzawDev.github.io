@@ -1,6 +1,6 @@
 // A generic category rail for noise.app: a vertical list of tabs (icon, name and
-// a count badge) that becomes a horizontal scroller when the window is narrow
-// (container query in os.css). Used by the sounds tab and, later, the radio vibes,
+// a count badge) that wraps into a row of icon chips when the window is narrow
+// (container query in os.css; only the selected chip shows its name there). Used by the sounds tab and, later, the radio vibes,
 // so nothing here knows about sounds.
 //
 // Semantics: role="tablist" + role="tab". Picking a category swaps the content of
@@ -27,7 +27,7 @@ export function buildRail(R, { items, active, label, onSelect, controls = null }
     const sr = h("span", { class: "sr-only" });
     const b = h("button", {
       type: "button", role: "tab", id: `${key}-${it.id}`, class: "nz-rail__tab", "data-id": it.id,
-      "aria-selected": "false", "aria-controls": controls, tabindex: "-1",
+      "aria-selected": "false", "aria-controls": controls, tabindex: "-1", title: it.name,
       onclick: () => pick(it.id, false),
     }, ico, h("span", { class: "nz-rail__name", text: it.name }), badge, sr);
     tabs.set(it.id, { b, badge, sr, n: -1 });
