@@ -112,6 +112,9 @@ export function createMini(D) {
     });
     m.more = h("button", { type: "button", class: "nz-mini__more", "aria-label": "Open noise.app", title: "open noise.app", onclick: () => m.onExpand?.() });
     m.more.innerHTML = D.icon("pop");
+    // closing stops the sound and clears the selection, which is what keeps the pill on screen
+    m.close = h("button", { type: "button", class: "nz-mini__more nz-mini__close", "aria-label": "Close player", title: "close player (stops the sound)", onclick: () => D.dismiss() });
+    m.close.innerHTML = D.icon("close");
     m.root = h("div", { class: "nz-mini", role: "region", "aria-label": "noise.app player" },
       m.play,
       h("div", { class: "nz-mini__info" },
@@ -119,7 +122,8 @@ export function createMini(D) {
         h("div", { class: "nz-mini__bot" }, m.desc, m.sleep)),
       m.cv,
       h("div", { class: "nz-mini__vol" }, m.vol, m.volNum),
-      m.more);
+      m.more,
+      m.close);
     m.shown = false;
     m.lastSleep = -1;
     return m;
@@ -204,7 +208,7 @@ export function createMini(D) {
       ];
     }
     if (opts.onExpand) M.onExpand = opts.onExpand;
-    M.zen = stageEl.id === "stage-zen";
+    M.zen = false; // the zen stage is gone, so the idle fade never applies
     if (M.root.parentNode !== stageEl) stageEl.append(M.root);
     M.colors = readColors(document.body);
     render();

@@ -21,6 +21,8 @@ const P = {
   trash:   '<path d="M2 3.5h8M4.5 3.5V2h3v1.5M3 3.5l.5 7h5l.5-7"/>',
   save:    '<path d="M1.5 1.5h7l2 2v7h-9z"/><path d="M3.5 1.5v3h4v-3M3.5 10.5V7h5v3.5"/>',
   play:    '<path d="M3.5 2v8l6-4z" class="f"/>',
+  tune:    '<path d="M1.5 3.5h9M1.5 8.5h9"/><rect x="3.5" y="2" width="2" height="3" class="f"/><rect x="7" y="7" width="2" height="3" class="f"/>',
+  arrow:   '<path d="M6 10.5v-8M2.5 6L6 2.5 9.5 6"/>',
   ext:     '<path d="M7 1.5h3.5V5M10.5 1.5L6 6"/><path d="M9 7.5v3H1.5V3h3"/>',
 };
 export const icon = (name, cls = "") =>

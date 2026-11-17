@@ -222,6 +222,15 @@ function clearMix() {
   announce("Mix cleared");
 }
 
+// the mini player shows while anything is selected, so closing it means dropping the whole selection
+function dismissMini() {
+  if (radio.current || pick === "radio") {
+    radio.stop();
+    if (pick === "radio") { pick = "none"; state.station = null; persist(); }
+  }
+  clearMix();
+}
+
 function setSleep(m) {
   sleepSel = m;
   engine.sleep(m);
@@ -606,7 +615,7 @@ function frame(now) {
 
 const mini = createMini({
   h, icon, engine, audio,
-  toggle, stopMode, hasSelection, info, status: statusInfo,
+  toggle, stopMode, hasSelection, info, status: statusInfo, dismiss: () => dismissMini(),
   wake: () => wake(),
 });
 

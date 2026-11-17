@@ -1,4 +1,4 @@
-// Backdrop for the focus and zen stages. One fixed layer behind both stages:
+// Backdrop for the home and focus stages. One fixed layer behind both stages:
 // a three.js canvas for the 3D themes (audio, drift), plain CSS for
 // grid/scan/glow, and ascii (drawn by the shared home art field in os.js).
 // Each mode remembers its own theme. three.js is only imported the first time
@@ -11,7 +11,8 @@ import { createPost } from "./post.js";
 
 export const BG_THEMES = ["off", "ascii", "audio", "drift", "grid", "scan", "glow"];
 const GL_THEMES = ["audio", "drift"];
-const STAGES = ["focus", "zen"];
+const STAGES = ["home", "focus"];
+const BAR_STAGES = ["focus"]; // home picks its background in config → home instead of a bar
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const h = (tag, props = {}, ...kids) => {
@@ -23,7 +24,7 @@ const cssVar = (name) => getComputedStyle(document.body).getPropertyValue(name).
 
 export function backdrop({ log = () => {}, onTheme = () => {} } = {}) {
   const pick = (v, list, dflt) => (list.includes(v) ? v : dflt);
-  const theme = Object.fromEntries(STAGES.map((m) => [m, pick(store.get(`bg.${m}`), BG_THEMES, "off")]));
+  const theme = Object.fromEntries(STAGES.map((m) => [m, pick(store.get(`bg.${m}`), BG_THEMES, m === "home" ? "ascii" : "off")]));
   let scene = pick(store.get("bg.scene"), AUDIO_SCENES, "orb");
   let mode = "desktop";
   let THREE = null, renderer = null, post = null, loading = null, raf = 0, holding = false;
@@ -52,7 +53,7 @@ export function backdrop({ log = () => {}, onTheme = () => {} } = {}) {
     return g;
   };
   // one control bar per stage; both are kept in sync
-  const bars = STAGES.map((m) => {
+  const bars = BAR_STAGES.map((m) => {
     const themes = keyGroup("Background", BG_THEMES, (v) => setTheme(v, m));
     const scenes = keyGroup("Audio scene", AUDIO_SCENES, (v) => setScene(v));
     const sources = keyGroup("Audio source", SOURCES, (v) => setSource(v));
@@ -77,7 +78,7 @@ export function backdrop({ log = () => {}, onTheme = () => {} } = {}) {
   audio.onChange(syncUi);
 
   // ---------- state ----------
-  function setTheme(next, m = STAGES.includes(mode) ? mode : "zen") {
+  function setTheme(next, m = STAGES.includes(mode) ? mode : "focus") {
     if (!BG_THEMES.includes(next) || !STAGES.includes(m)) return false;
     const swap = m === mode && theme[m] !== next;
     theme[m] = next;
@@ -111,10 +112,6 @@ export function backdrop({ log = () => {}, onTheme = () => {} } = {}) {
   }
   function setMode(next) {
     mode = next;
-    const onStage = STAGES.includes(mode);
-    // hold the audio stream while a stage is up; leaving lets it stop (unless viz.app holds it)
-    if (onStage && !holding) { audio.retain(); holding = true; }
-    if (!onStage && holding) { audio.release(); holding = false; }
     apply();
   }
   function setColors() {
@@ -132,6 +129,11 @@ export function backdrop({ log = () => {}, onTheme = () => {} } = {}) {
   }
   function apply() {
     const t = STAGES.includes(mode) ? theme[mode] : "off";
+    // hold the audio stream while a stage that listens is up; leaving lets it stop (unless viz.app holds it).
+    // home only listens when its background is audio
+    const listen = STAGES.includes(mode) && (mode !== "home" || t === "audio");
+    if (listen && !holding) { audio.retain(); holding = true; }
+    if (!listen && holding) { audio.release(); holding = false; }
     // ascii is drawn by the shared home art field in os.js, not this layer
     layer.hidden = t === "off" || t === "ascii";
     layer.dataset.bg = t;

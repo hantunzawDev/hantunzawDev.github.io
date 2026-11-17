@@ -1,6 +1,6 @@
 // hzOS shell: window manager, modes, apps, command line.
 import {
-  store, settings, saveSettings, resetSettings, links, pad, dayKey, hhmm, hourLabel, ago, isoWeek, spark, bar,
+  store, settings, saveSettings, resetSettings, artDisplayDefaults, ART_DISPLAY_KEYS, links, pad, dayKey, hhmm, hourLabel, ago, isoWeek, spark, bar,
   currentQuote, fetchWeather, FEEDS, fetchFeed, getJSON,
 } from "./data.js";
 import { createMap, subsolar } from "./map.js";
@@ -8,9 +8,11 @@ import { PACK_NAMES, ROTATIONS, parseLine, formatLine, contextLabel, slotKey } f
 import { snake, typer } from "./games.js";
 import { bughunt } from "./fps.js";
 import { backdrop, BG_THEMES } from "./backdrop.js";
+import { createHomeGrid } from "./homegrid.js";
+import { createOnboard } from "./onboard.js";
 import { artStage, textPiece, imageToArt, imageArtPiece, loadIndex, LOOKS, FEATURED } from "./ascii.js";
 import { AUDIO_SCENES } from "./scenes.js";
-import { SOURCES as AUDIO_SOURCES } from "./audio.js";
+import { SOURCES as AUDIO_SOURCES, audio } from "./audio.js";
 import { cowsay, neofetch, eightBall, HACK, TRAIN, matrix, calc } from "./fun.js";
 import { icon, hydrateIcons } from "./icons.js";
 import { sniff, calcJoke, bump, heat, reaction, applyHeat, consoleBait } from "../assets/js/eggs.js";
@@ -481,7 +483,7 @@ function syncLayoutChip() {
   const b = $("#layout-tile");
   const glyph = settings.tile ? (tileLayout() === "master" ? "tile" : "bento") : "float";
   if (b.dataset.glyph !== glyph) { $(".chip__glyph", b).innerHTML = icon(glyph); b.dataset.glyph = glyph; }
-  const name = settings.tile ? layoutLabel() : "free";
+  const name = settings.tile ? layoutLabel() : "float";
   $(".chip__label", b).textContent = name;
   b.setAttribute("aria-label", `Window layout: ${name}`);
   b.title = `window layout: ${name} · click to change (alt+space cycles)`;
@@ -819,7 +821,7 @@ function layoutItems() {
       { role: "menuitemradio", checked: on("columns"), disabled: !wide, desc: "fixed columns you set up · drag the gaps to resize" })] : []),
     menuItem("bento", () => setTileLayout("bento"), { role: "menuitemradio", checked: on("bento"), disabled: !wide, desc: "auto tiles · busy apps get the big ones" }),
     menuItem("master + stack", () => setTileLayout("master"), { role: "menuitemradio", checked: on("master"), disabled: !wide, desc: "one big window, the rest stacked beside it" }),
-    menuItem("free", () => setTile(false), { role: "menuitemradio", checked: !settings.tile, disabled: !wide, hint: "⌥T", desc: "move and size windows yourself · snaps to edges" }),
+    menuItem("float", () => setTile(false), { role: "menuitemradio", checked: !settings.tile, disabled: !wide, hint: "⌥T", desc: "move and size windows yourself · snaps to edges" }),
     menuSep(),
     menuItem(settings.tile ? "even out tile sizes" : "tidy into a grid", arrangeAll, { disabled: !wide, hint: "⌥A" }),
     menuItem("close all windows", () => closeAll(), { hint: "⌥⇧W" }),
@@ -1002,7 +1004,7 @@ function openZones(app, { focusFirst = false } = {}) {
   for (const k of [...(tileGroups ? ["columns"] : []), ...TILE_LAYOUTS, "float"]) {
     const on = k === "float" ? !settings.tile : settings.tile && tileLayout() === k;
     const b = h("button", { type: "button", className: "zones__chip", innerHTML: icon(k === "master" ? "tile" : k === "float" ? "float" : "bento") });
-    b.append(h("span", { textContent: k === "columns" ? tileGroups.name : k === "float" ? "free" : k }));
+    b.append(h("span", { textContent: k === "columns" ? tileGroups.name : k === "float" ? "float" : k }));
     b.setAttribute("aria-pressed", String(on));
     b.addEventListener("click", () => { closeZones(); k === "float" ? setTile(false) : setTileLayout(k); });
     lay.append(b);
@@ -1153,13 +1155,26 @@ addEventListener("keydown", (e) => {
 });
 
 /* =========================================================
-   modes: home · desktop · focus · zen
+   modes: home · desktop · focus
    ========================================================= */
-const MODES = ["home", "desktop", "focus", "zen"];
-const MODE_KEYS = { home: 0, desktop: 1, focus: 2, zen: 3 }; // alt+digit
-// shared ascii field: home always, focus/zen when bg theme is ascii. one player, no restart on mode hops.
+const MODES = ["home", "desktop", "focus"];
+const MODE_KEYS = { home: 0, desktop: 1, focus: 2 }; // alt+digit
+// shared ascii field: home and focus when their bg theme is ascii. one player, no restart on mode hops.
 const DEFAULT_ART = "marine-drive-necklace";
 const homeArt = artStage($("#home-field"));
+const homeGrid = createHomeGrid({ stage: $("#stage-home"), settings, save: saveSettings, onPlace: () => placeHome() });
+homeGrid.place();
+// first-visit hints on an empty desktop; they watch window visibility, so open/close code needs no changes
+const onboard = createOnboard({
+  root: $("#onboard"), store, reduce: () => reduce,
+  isDesktop: () => document.body.dataset.mode === "desktop",
+  windowsOpen: () => !!document.querySelector("#desktop .win:not([hidden])"),
+  anchors: { apps: () => $('[data-menu="apps"] .menu__trigger'), modes: () => $(".modes"), cmd: () => ($("#cmd-out").offsetHeight ? $("#cmd-out") : $("footer.cmd")) }, // the tip sits above whatever the terminal shows
+  onApps: () => $('[data-menu="apps"] .menu__trigger').click(),
+  onHelp: () => { log("$ help", "dim"); run("help"); focusCmd(); },
+});
+new MutationObserver(() => onboard.sync()).observe($("#desktop"), { subtree: true, attributes: true, attributeFilter: ["hidden"] });
+let stageBg = null; // the backdrop controller, made below; artWanted() asks it which theme home and focus use
 let artPreview = null; // small copy in config → home, made when that pane first opens
 // what settings.homeArt points at: a library slug, or one of the two kinds of art you bring yourself
 function artSource() {
@@ -1168,29 +1183,35 @@ function artSource() {
   if (a === "custom:image") return imageArtPiece(store.get("homeImage", null));
   return a || DEFAULT_ART;
 }
-const artOpts = () => ({ look: settings.homeLook, mono: settings.homeMono, fit: settings.homeFit, speed: settings.homeSpeed, reduce });
+const artOpts = () => ({
+  look: settings.homeLook, mono: settings.homeMono, fit: settings.homeFit, speed: settings.homeSpeed, reduce,
+  layout: settings.homeLayout, fade: settings.homeFade, bleed: settings.homeBleed,
+});
 function artWanted() {
   if (document.hidden) return false;
-  const mode = document.body.dataset.mode;
-  if (mode === "home") return true;
-  if ((mode === "focus" || mode === "zen") && stageBg?.theme(mode) === "ascii") return true;
-  return false;
+  const mode = document.body.dataset.mode, bg = stageBg?.theme(mode);
+  if (mode === "home") return bg === "ascii";
+  return mode === "focus" && bg === "ascii";
 }
 function syncArtLive() {
   const on = artWanted();
   const field = $("#home-field");
   field.hidden = !on;
   document.body.classList.toggle("has-art", on);
+  placeHome(); // the command line sits under the clock whether or not art is behind it
   if (on) {
-    if (document.body.dataset.mode === "home") placeHome();
     if (!homeArt.running) applyArt(); // loads the piece then start()s
   } else if (homeArt.running) homeArt.stop();
 }
 async function applyArt() {
-  $("#home-field").style.setProperty("--art-dim", String(Math.min(100, Math.max(10, settings.homeDim)) / 100)); // a variable, so the mode fade can own inline opacity
+  const field = $("#home-field");
+  field.style.setProperty("--art-dim", String(Math.min(100, Math.max(10, settings.homeDim)) / 100)); // a variable, so the mode fade can own inline opacity
+  field.style.setProperty("--art-x", `${clamp(settings.homeX, -30, 30)}vw`);
+  field.style.setProperty("--art-y", `${clamp(settings.homeY, -30, 30)}vh`);
+  field.style.filter = settings.homeContrast === 100 ? "" : `contrast(${clamp(settings.homeContrast, 60, 200) / 100})`;
   let src = artSource() || DEFAULT_ART;
   if (!(await homeArt.show(src, artOpts())) && src !== DEFAULT_ART) { src = DEFAULT_ART; homeArt.show(src, artOpts()); }
-  artPreview?.show(src, { ...artOpts(), fit: "fit" });
+  artPreview?.show(src, { ...artOpts(), fit: "fit", layout: "fill", fade: 0 });
   syncArtPick();
   if (artWanted() && !homeArt.running) homeArt.start();
 }
@@ -1208,16 +1229,16 @@ function placeHome() {
 $("#stage-home").addEventListener("mousedown", (e) => { e.preventDefault(); if (!touch()) input.focus({ preventScroll: true }); });
 addEventListener("resize", placeHome);
 document.fonts?.ready.then(placeHome);
-const stageBg = backdrop({ log, onTheme: () => syncArtLive() }); // three.js / css / ascii behind focus + zen
+stageBg = backdrop({ log, onTheme: () => { syncArtLive(); syncHomeBg(); } }); // three.js / css / ascii behind home + focus
 let modeFade = null;
-const MODE_FADE_SEL = "#stage-home, #stage-focus, #stage-zen, #home-field, .backdrop";
+const MODE_FADE_SEL = "#stage-home, #stage-focus, #home-field, .backdrop";
 function setMode(mode) {
   if (!MODES.includes(mode)) return false;
+  if (mode !== "home") closeTune({ refocus: false });
   document.body.dataset.mode = mode;
   stageBg.setMode(mode);
   store.set("mode", mode);
   $("#stage-focus").hidden = mode !== "focus";
-  $("#stage-zen").hidden = mode !== "zen";
   $("#stage-home").hidden = mode !== "home";
   syncTermDock();
   input.placeholder = mode === "home" ? "search or type a command" : "type help, a command, or anything to search";
@@ -1226,15 +1247,15 @@ function setMode(mode) {
   syncArtLive();
   $$(".modes [role=radio]").forEach((b) => { const on = b.dataset.mode === mode; b.setAttribute("aria-checked", String(on)); b.tabIndex = on ? 0 : -1; });
   if (mode === "focus") { renderStageTask(); $("#stage-focus [data-focus-start]").focus(); }
-  if (mode === "zen") renderZen();
   syncMini();
+  onboard.sync();
   // one short opacity crossfade of the whole stage + its background; interruptible, no stagger
   if (modeFade) { modeFade.kill(); modeFade = null; }
   if (window.gsap) gsap.set(MODE_FADE_SEL, { clearProps: "opacity" });
   if (mode !== "desktop" && !reduce && window.gsap && !document.hidden) {
     const fadeEls = [$(`#stage-${mode}`)];
     const bg = stageBg.theme(mode);
-    if ((mode === "focus" || mode === "zen") && bg && bg !== "off" && bg !== "ascii") fadeEls.push($(".backdrop"));
+    if (bg && bg !== "off" && bg !== "ascii") fadeEls.push($(".backdrop"));
     const field = artWanted() && !hadArt ? $("#home-field") : null;
     const all = field ? [...fadeEls, field] : fadeEls;
     gsap.set(all, { opacity: 0 });
@@ -1260,9 +1281,9 @@ $$(".modes [role=radio]").forEach((b) => {
 // alt+0/1/2/3 switch modes from anywhere, even while typing (alt+digit types nothing useful)
 addEventListener("keydown", (e) => {
   if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-  if (e.code === "Comma") { e.preventDefault(); openConfig(); return; }
+  if (e.code === "Comma") { e.preventDefault(); if (document.body.dataset.mode === "home") toggleTune(); else openConfig(); return; }
   if (e.code === "KeyN") { e.preventDefault(); loadNoise().then((ui) => ui.toggle(), (err) => log(`noise.app: ${err.message}`, "err")); return; }
-  const m = { Digit0: "home", Digit1: "desktop", Digit2: "focus", Digit3: "zen" }[e.code];
+  const m = { Digit0: "home", Digit1: "desktop", Digit2: "focus" }[e.code];
   if (!m) return;
   e.preventDefault();
   setMode(m);
@@ -1277,9 +1298,6 @@ function renderStageTask() {
   el.textContent = `working on: ${open[stageTask].text}`;
 }
 $("#stage-next-task").addEventListener("click", () => { stageTask++; renderStageTask(); });
-function renderZen() {
-  if (quote) $("#zen-quote").textContent = `${quote.text}  -- ${quote.by}`;
-}
 
 /* =========================================================
    clock.app + menubar
@@ -1307,7 +1325,6 @@ function tick() {
     const hrs = settings.h24 ? pad(now.getHours()) : String(now.getHours() % 12 || 12);
     const time = `${hrs}:${pad(now.getMinutes())}`;
     $("#clock").textContent = time;
-    $("#zen-time").textContent = time;
     $("#home-time").textContent = time;
     $("#home-time").dateTime = now.toISOString();
     $("#home-ampm").textContent = settings.h24 ? "" : now.getHours() < 12 ? "am" : "pm";
@@ -1320,7 +1337,6 @@ function tick() {
     const doy = Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 864e5);
     const days = (new Date(now.getFullYear() + 1, 0, 1) - new Date(now.getFullYear(), 0, 1)) / 864e5;
     $("#clock-date").textContent = `${fmtDay(now)} · w${isoWeek(now)} · day ${doy}/${days}`;
-    $("#zen-date").textContent = `${greeting(now.getHours())}, ${(settings.name || "friend").toLowerCase()} · ${fmtDay(now)}`;
     $("#st-date").textContent = fmtDay(now).split(" ").slice(0, 3).join(" ");
     const dayFrac = (now.getHours() * 60 + now.getMinutes()) / 1440;
     const yearFrac = doy / days;
@@ -1363,6 +1379,7 @@ async function loadWx(force = false) {
         `     ${hours}` }),
       h("p", { className: "wx__guess", textContent: `> ${w.guess}` }),
     );
+    homeGrid.weather(w);
     $("#st-wx").textContent = `wx:${Math.round(w.temp)}° ${w.rainy ? "rain" : w.desc.split(" ").pop()}`;
     worldMap?.setLocation(w.place.lat, w.place.lon);
     renderMapInfo(w);
@@ -1408,6 +1425,7 @@ function renderTodo() {
     rm.addEventListener("click", () => removeTodo(i + 1));
     return h("li", { className: t.done ? "done" : "" }, h("span", { className: "n", textContent: pad(i + 1) }), box, h("span", { className: "txt", textContent: t.text }), rm);
   }));
+  homeGrid.todo(todos);
   if (!todos.length) list.append(h("li", { className: "dim", textContent: "empty. what's the one thing today?" }));
   const open = todos.filter((t) => !t.done).length;
   $("#todo-meta").textContent = todos.length ? `${open}/${todos.length} open` : "";
@@ -1454,6 +1472,7 @@ function renderFocus() {
     view.classList.toggle("is-break", focus.mode === "break");
     $("[data-focus-start]", view).textContent = focus.running ? "pause" : ms < total ? "resume" : "start";
   }
+  homeGrid.focus(mmss(ms), focus.mode, focus.running);
   document.title = focus.running ? `${mmss(ms)} ${focus.mode} · hzOS` : "hzOS";
   $$(".focus__len .key").forEach((b) => (b.disabled = focus.running));
   return ms;
@@ -1539,11 +1558,11 @@ function renderFortune(again = false) {
   // "again" should actually change the quote when the pool allows it
   for (let i = 0; again && r.quote.text === prev && i < 6; i++) r = currentQuote(new Date(), ++qSalt);
   quote = r.quote; why = r.why;
+  homeGrid.quote(quote);
   const el = $("#fortune-text");
   $("#fortune-by").textContent = `  -- ${quote.by}`;
   $("#fortune-ctx").textContent = settings.qMatch ? contextLabel(new Date()) : "";
   if (again && !reduce) typeOut(el, quote.text); else { clearInterval(el._t); el.textContent = quote.text; }
-  renderZen();
 }
 function typeOut(el, text) {
   clearInterval(el._t);
@@ -1629,8 +1648,8 @@ function noiseSaved() {
   const hasLayers = saved && typeof saved.layers === "object" && saved.layers && Object.keys(saved.layers).length > 0;
   return src === "radio" || !!hasLayers;
 }
-// mini player on the focus/zen stage; it decides itself whether there is anything to show.
-// Entering focus/zen with a saved selection loads the module (silent: never autoplays).
+// mini player on the home and focus stages; it decides itself whether there is anything to show.
+// Entering home or focus with a saved selection loads the module (silent: never autoplays).
 function syncMini() {
   const mode = document.body.dataset.mode;
   const p = mode !== "desktop" && !noiseP && noiseSaved() ? loadNoise() : noiseP;
@@ -1645,7 +1664,7 @@ function noiseCmd(cmd, a) {
   return loadNoise().then((ui) => { for (const [text, cls = ""] of ui.run(cmd, a || "")) log(text, cls); }, (e) => log(`noise.app: ${e.message}`, "err"));
 }
 // boot: bring back the last selection (silent) so the mini player can show it. On the
-// desktop nothing shows it until noise.app opens (or focus/zen starts, via syncMini),
+// desktop nothing shows it until noise.app opens (or home/focus starts, via syncMini),
 // so the module isn't fetched there at all.
 function noiseRestore() {
   if (document.body.dataset.mode !== "desktop") syncMini();
@@ -1816,14 +1835,18 @@ function openConfig(pane) {
 }
 
 // read and write a settings key through the form, whatever control it lives in
-const UNITS = { mfact: (v) => `${Math.round(v * 100)}%`, homeDim: (v) => `${v}%`, homeSpeed: (v) => `${v}×`, homeFps: (v) => `${v} fps` };
+const UNITS = {
+  mfact: (v) => `${Math.round(v * 100)}%`, homeDim: (v) => `${v}%`, homeSpeed: (v) => `${v}×`, homeFps: (v) => `${v} fps`,
+  homeFade: (v) => `${v}%`, homeBleed: (v) => `${v}%`, homeContrast: (v) => `${v}%`, homeX: (v) => `${v > 0 ? "+" : ""}${v}`, homeY: (v) => `${v > 0 ? "+" : ""}${v}`,
+};
 function fieldOf(k) { const f = cfg.elements[k]; return f && (f instanceof RadioNodeList || f.name === k) ? f : null; }
 function writeField(k, v) {
   const f = fieldOf(k);
   if (!f) return;
   if (f instanceof RadioNodeList) { for (const r of f) r.checked = r.value === String(v); return; }
   if (f.type === "checkbox") f.checked = !!v; else f.value = v;
-  const o = $(`[data-out="${k}"]`, cfg);
+  if (f.type === "range") f.style.setProperty("--p", `${((f.value - (+f.min || 0)) / ((+f.max || 100) - (+f.min || 0))) * 100}%`); // fills the slider track
+  const o = $(`[data-out="${k}"]`); // not scoped to cfg: the home pane can be floated over home
   if (o) o.textContent = (UNITS[k] || ((x) => `${x}px`))(v);
 }
 function readField(k) {
@@ -1866,6 +1889,7 @@ const LIVE = {
   linksMenu: syncLinksMenu,
   homeLook: applyArt, homeMono: applyArt, homeFit: applyArt, homeDim: applyArt, homeSpeed: applyArt,
   homeText: applyArt, homeFps: applyArt, homeFx: applyArt,
+  homeLayout: () => { syncLayoutRows(); applyArt(); }, homeFade: applyArt, homeBleed: applyArt, homeContrast: applyArt, homeX: applyArt, homeY: applyArt,
 };
 function commit(k) {
   if (!Object.hasOwn(settings, k) || !fieldOf(k)) return;
@@ -1878,13 +1902,15 @@ function commit(k) {
   flashSaved();
 }
 let typing = 0;
-cfg.addEventListener("input", (e) => {
+const onCfgInput = (e) => {
   const k = e.target.name;
   if (!k) return;
   if (e.target.type === "range") { commit(k); return; }
   if (e.target.matches("input[type=text], textarea") && k !== "city") { clearTimeout(typing); typing = setTimeout(() => commit(k), 450); }
-});
-cfg.addEventListener("change", (e) => { if (e.target.name) commit(e.target.name); });
+};
+const onCfgChange = (e) => { if (e.target.name) commit(e.target.name); };
+cfg.addEventListener("input", onCfgInput);
+cfg.addEventListener("change", onCfgChange);
 cfg.addEventListener("submit", (e) => { e.preventDefault(); const k = document.activeElement?.name; if (k) commit(k); });
 
 /* ---------- config → home: pick the art behind the clock ---------- */
@@ -1938,6 +1964,83 @@ async function openArtPane() {
 artQ.addEventListener("input", renderArtList);
 artCat.addEventListener("change", renderArtList);
 artList.addEventListener("click", (e) => { const b = e.target.closest(".artrow"); if (b) { setArt(b.dataset.slug); flashSaved(); } });
+/* ---------- config → home: background (art, or one of the stage backdrops) ---------- */
+const radioSeg = (host, name, items, label = (v) => v) => {
+  host.replaceChildren(...items.map((v) => h("label", {}, h("input", { type: "radio", name, value: v }), h("span", {}, label(v)))));
+};
+radioSeg($("#cfg-homebg"), "homeBg", BG_THEMES, (v) => (v === "ascii" ? "art" : v));
+radioSeg($("#cfg-homescene"), "homeScene", AUDIO_SCENES);
+radioSeg($("#cfg-homesource"), "homeSource", AUDIO_SOURCES);
+function syncHomeBg() {
+  const bg = stageBg?.theme("home");
+  if (!bg) return;
+  const set = (name, v) => $$(`input[name="${name}"]`).forEach((r) => { r.checked = r.value === v; });
+  set("homeBg", bg); set("homeScene", stageBg.scene); set("homeSource", audio.source);
+  $("#art-controls").hidden = bg !== "ascii";
+  $("#cfg-homescene-row").hidden = $("#cfg-homesource-row").hidden = bg !== "audio";
+}
+audio.onChange(syncHomeBg);
+const onHomeBgChange = (e) => {
+  const { name, value } = e.target;
+  if (name === "homeBg") stageBg.setTheme(value, "home");
+  else if (name === "homeScene") stageBg.setScene(value);
+  else if (name === "homeSource") stageBg.setSource(value);
+  else return;
+  flashSaved();
+};
+cfg.addEventListener("change", onHomeBgChange);
+/* ---------- tune home: the config → home pane, floated over the home screen so changes show live ---------- */
+homeGrid.buildConfig($("#cfg-widgets"));
+homeGrid.bindConfig($("#cfg-widgets"));
+const tune = $("#home-tune"), tuneBody = $("#tune-body"), homePane = $('.config__pane[data-pane="home"]', cfg);
+// its controls keep belonging to the config form after the pane is moved out of it
+$$("input, select, textarea, button", homePane).forEach((el) => el.setAttribute("form", "config"));
+tuneBody.addEventListener("input", onCfgInput);
+tuneBody.addEventListener("change", onCfgChange);
+tuneBody.addEventListener("change", onHomeBgChange);
+// rows only make sense for the layout they tune
+function syncLayoutRows() {
+  const l = settings.homeLayout;
+  $("#row-homefit").hidden = l !== "fill";
+  $("#row-homefade").hidden = l !== "centre";
+  $("#row-homebleed").hidden = l !== "tile";
+}
+function openTune() {
+  if (document.body.dataset.mode !== "home" || !tune.hidden) return;
+  fillConfig();
+  syncHomeBg();
+  syncLayoutRows();
+  tuneBody.append(homePane);
+  homePane.hidden = false;
+  tune.hidden = false;
+  openArtPane();
+  $("#tune-open").setAttribute("aria-expanded", "true");
+  $("#tune-close").focus({ preventScroll: true });
+}
+function closeTune({ refocus = true } = {}) {
+  if (tune.hidden) return;
+  tune.hidden = true;
+  $("#tune-open").setAttribute("aria-expanded", "false");
+  $(".config__panes", cfg).append(homePane);
+  const onHome = $(".config__nav [aria-selected=true]", cfg)?.dataset.pane === "home";
+  homePane.hidden = !onHome;
+  if (!onHome) artPreview?.stop();
+  if (refocus && !touch()) input.focus({ preventScroll: true });
+}
+const toggleTune = () => (tune.hidden ? openTune() : closeTune());
+$("#tune-close").addEventListener("click", () => closeTune());
+$("#tune-open").addEventListener("click", toggleTune);
+tune.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeTune(); } });
+syncLayoutRows();
+$("#art-reset").addEventListener("click", () => {
+  Object.assign(settings, artDisplayDefaults());
+  saveSettings();
+  for (const k of ART_DISPLAY_KEYS) writeField(k, settings[k]);
+  syncArtLive();
+  applyArt();
+  syncLayoutRows();
+  flashSaved("art display reset");
+});
 $("#art-shuffle").addEventListener("click", () => {
   const rows = artIndex ? artMatches().filter((p) => p.slug !== settings.homeArt) : [];
   if (!rows.length) return;
@@ -2152,7 +2255,7 @@ function armOutTimer(ms = 15000) {
 /* ---------- term window: the command line can live in the footer or in its own window ---------- */
 let termDocked = false;
 const cmdFooter = $("footer.cmd");
-// in the window on wide screens in desktop mode; back in the footer otherwise (focus/zen, phones, closed)
+// in the window on wide screens in desktop mode; back in the footer otherwise (home, focus, phones, closed)
 function syncTermDock() {
   const want = !win("term").hidden && !small() && document.body.dataset.mode === "desktop";
   if (want === termDocked) return;
@@ -2179,7 +2282,7 @@ let hIdx = history.length;
 
 const HELP = {
   todo:   "t <task> · done <n> · rm <n> · note <text> · cat todo.txt|notes.md",
-  focus:  "f [min] · pause · reset · mode home|desktop|focus|zen · timer 10m [label] · timers",
+  focus:  "f [min] · pause · reset · mode home|desktop|focus · timer 10m [label] · timers",
   info:   "wx · news hn|dev|gh|world · define <word> · wiki <topic> · date · uptime",
   tools:  "= <math> · pass [len] · uuid · b64 <text> · unb64 <text> · g|yt|ddg|gh <query> · <link name>",
   quotes: "quote [now] · quote add <text> -- <author> @tags · quote ls · quote rm <n> · quote rotate visit|30m|hourly|daily · quote pack <name> on|off · quote match on|off · quote tags",
@@ -2187,8 +2290,10 @@ const HELP = {
   games:  "snake · type · guess · fps (bughunt)",
   ...(VIZ_ENABLED ? { audio: "viz [mic|sys|noise|off] · viz orb|terrain|pulsar" } : {}),
   noise:  "noise (play/stop, alt+n) · noise <sound> [0-100] · noise off <sound> · noise <preset> · noise vol <n> · noise save <name> · noise list · radio [station|off] · sleep 30m|off",
+  tour:   "tour · show the first-visit hints again",
+  tune:   "tune · adjust the home art and background live, over home (alt+, on home)",
   art:    "art (what is playing) · art random · art <name> · more under config → home",
-  bg:     `bg [off|ascii|audio|drift|grid|scan|glow] [focus|zen] · bg orb|terrain|pulsar · bg mic|sys|noise|off · [ ] cycle on stage`,
+  bg:     `bg [off|ascii|audio|drift|grid|scan|glow] [home|focus] · bg orb|terrain|pulsar · bg mic|sys|noise|off · [ ] cycle on stage`,
   system: "open|close|max <app> · ls · layout ls|save|load|rm|startup <name> · layout reset · config [general|look|windows|startup|links|quotes|data] · close all|others · reopen · tile [on|off|bento|master|hero|rebalance] · arrange · zones [app] · float [app] [on|off] · snap on|off · theme lime|amber|ice|purple|paper · name|city <x> · 12h|24h · history · clear",
 };
 const safeUrl = (u) => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : "#"; } catch { return "#"; } }; // feed/calendar URLs are third-party data
@@ -2231,8 +2336,10 @@ const COMMANDS = {
   pause: () => { focusPause(); log("focus.exe: paused."); },
   stop: () => COMMANDS.pause(),
   reset: () => { focusReset(); log("focus.exe: reset."); },
-  mode: (a) => (setMode(a || "desktop") ? log(`mode: ${a || "desktop"}`, "ok") : log("usage: mode home|desktop|focus|zen", "err")),
+  mode: (a) => (setMode(a || "desktop") ? log(`mode: ${a || "desktop"}`, "ok") : log("usage: mode home|desktop|focus", "err")),
   home: () => COMMANDS.mode("home"),
+  tour: () => { setMode("desktop"); onboard.show(); },
+  tune: () => { setMode("home"); openTune(); },
   art: async (a) => {
     const q = (a || "").trim().toLowerCase();
     if (!q) { log(`art: ${artName()} (${settings.homeArt}). try art random, art <name>, or config → home.`); return; }
@@ -2247,7 +2354,6 @@ const COMMANDS = {
     await setArt(p.slug);
     log(`art: ${p.name}${hits.length > 1 && !exact && q !== "random" && q !== "shuffle" ? ` (${hits.length - 1} more match)` : ""}`, "ok");
   },
-  zen: () => COMMANDS.mode("zen"),
   desktop: () => COMMANDS.mode("desktop"),
   exit: () => (document.body.dataset.mode !== "desktop" ? setMode("desktop") : log("there is no exit. you live here now.")),
   timer: (a) => {
@@ -2400,17 +2506,17 @@ const COMMANDS = {
   sleep: (a) => noiseCmd("sleep", a),
   bg: (a) => {
     const [x = "", where = ""] = (a || "").toLowerCase().split(/\s+/);
-    const stage = ["focus", "zen"].includes(where) ? where : ["focus", "zen"].includes(document.body.dataset.mode) ? document.body.dataset.mode : null;
-    if (!x) return log(`bg: focus=${stageBg.theme("focus")} zen=${stageBg.theme("zen")} scene=${stageBg.scene}`);
+    const stage = ["home", "focus"].includes(where) ? where : ["home", "focus"].includes(document.body.dataset.mode) ? document.body.dataset.mode : null;
+    if (!x) return log(`bg: home=${stageBg.theme("home")} focus=${stageBg.theme("focus")} scene=${stageBg.scene}`);
     if (BG_THEMES.includes(x)) {
-      const m = stage || "zen";
+      const m = stage || "focus";
       stageBg.setTheme(x, m);
       if (document.body.dataset.mode === "desktop") setMode(m);
       return log(`bg: ${m} → ${x}`, "ok");
     }
     if (AUDIO_SCENES.includes(x)) { stageBg.setScene(x); return log(`bg: audio scene → ${x}`, "ok"); }
     if (AUDIO_SOURCES.includes(x)) {
-      if (!stage) return log("bg: enter focus or zen first (mode zen), then pick a source.", "err");
+      if (!stage) return log("bg: enter home or focus first (mode focus), then pick a source.", "err");
       return stageBg.setSource(x);
     }
     log(`usage: ${HELP.bg}`, "err");
@@ -2599,7 +2705,7 @@ input.addEventListener("keydown", (e) => {
     else if (c === "news") { pool = Object.keys(FEEDS); prefix = c + " "; }
     else if (c === "viz" && VIZ_ENABLED) { pool = [...AUDIO_SOURCES, ...AUDIO_SCENES]; prefix = c + " "; }
     else if (c === "bg") {
-      pool = r.length <= 1 ? [...BG_THEMES, ...AUDIO_SCENES, ...AUDIO_SOURCES] : ["focus", "zen"];
+      pool = r.length <= 1 ? [...BG_THEMES, ...AUDIO_SCENES, ...AUDIO_SOURCES] : ["home", "focus"];
       prefix = r.length <= 1 ? c + " " : `${c} ${r[0]} `;
       if (r.length > 1) r.shift();
     }
@@ -2794,7 +2900,8 @@ async function start() {
     store.set("homeIntro", 1);
     if (["last", "desktop"].includes(settings.startMode)) { settings.startMode = "home"; saveSettings(); }
   }
-  setMode(settings.startMode === "last" ? store.get("mode", "home") : settings.startMode);
+  // a saved mode that no longer exists (zen was removed) falls back to home
+  if (!setMode(settings.startMode === "last" ? store.get("mode", "home") : settings.startMode)) setMode("home");
   worldMap = createMap($("#map"), $("#map-pin"));
   loadWx();
 

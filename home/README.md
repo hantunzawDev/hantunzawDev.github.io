@@ -24,16 +24,15 @@ Drag a window by its title bar, resize it from the bottom-right corner, and doub
 
 ## Modes
 
-Switch modes from the menubar, with `mode <name>`, or with alt+0 to alt+3. Esc returns to desktop from focus and zen.
+Switch modes from the menubar, with `mode <name>`, or with alt+0 to alt+2. Esc returns to desktop from focus. A first visit to an empty desktop shows hints; `tour` brings them back.
 
 - **home:** the first screen. A clock and the command line as a search bar over animated ASCII art that fills the screen. Pick the art under config → home: 734 pieces from the self-hosted [ascii-magic-art](https://www.ascii-magic.com/ascii) library (MIT, in `vendor/ascii-magic-art`), redrawn in any of its character sets, in its own colours or the theme colour. Or bring your own: paste text art (a line of `---` between frames animates it) or turn a picture into halftone cells, all in the browser. `art random` and `art <name>` switch from the command line. Esc clears the bar. Pick another first screen under config → startup → open in.
 - **desktop:** all the windows.
 - **focus:** only a full-screen pomodoro, showing the task you're working on (`next task` cycles through open todos). Background themes via `bg` (including `bg ascii` for the same animated art as home).
-- **zen:** only a big clock, the date and the quote of the day. Same `bg` themes as focus, including `ascii`.
 
 ## Quotes
 
-The fortune window and zen mode share one picker. Set it up in `config.ini` → `[quotes]` or with `quote` commands.
+The fortune window and the home quote widget share one picker. Set it up in `config.ini` → `[quotes]` or with `quote` commands.
 
 - **Packs:** `dev`, `stoic`, `motivation` and `rest`, each on or off.
 - **Your own quotes:** one per line, as `text -- author @tags`. Lines starting with `#` are ignored.
@@ -61,14 +60,14 @@ Press `/` to focus it. ↑/↓ steps through history and Tab completes commands,
 
 ```
 todo    t <task> · done <n> · rm <n> · note <text> · cat todo.txt|notes.md
-focus   f [min] · pause · reset · mode desktop|focus|zen · timer 10m [label] · timers
+focus   f [min] · pause · reset · mode home|desktop|focus · timer 10m [label] · timers
 info    wx · news hn|dev|gh|world · define <word> · wiki <topic> · date · uptime
 tools   = <math> · pass [len] · uuid · b64 <text> · unb64 <text> · g|yt|ddg|gh <query> · <link name>
 quotes  quote [now] · quote add <text> -- <author> @tags · quote ls · quote rm <n> · quote rotate visit|30m|hourly|daily · quote pack <name> on|off · quote match on|off · quote tags
 fun     neofetch · cowsay <text> · fortune · joke · 8ball <q> · roll [2d6] · flip · hack · sl · matrix · coffee
 games   snake · type · guess · fps
 noise   noise (play/stop, alt+n) · noise <sound> [0-100] · noise off <sound> · noise <preset> · noise vol <n> · noise save <name> · noise list · radio [station|off] · sleep 30m|off
-bg      bg [off|ascii|audio|drift|grid|scan|glow] [focus|zen] · bg orb|terrain|pulsar · bg mic|sys|noise|off · [ ] cycle on stage
+bg      bg [off|ascii|audio|drift|grid|scan|glow] [home|focus] · bg orb|terrain|pulsar · bg mic|sys|noise|off · [ ] cycle on stage
 system  open|close|max <app> · ls · layout reset · theme <name> · name|city <x> · 12h|24h · history · clear
 ```
 
@@ -76,7 +75,7 @@ system  open|close|max <app> · ls · layout reset · theme <name> · name|city 
 - `pass` and `uuid` copy their result to the clipboard.
 - `timer 10m tea` counts down in the menubar and chimes when time is up.
 - `matrix` runs until you press a key or click.
-- `bg ascii` (focus or zen) shows the same animated ASCII art as home behind the stage; desktop stops it. `bg noise` drives the audio backdrop from whatever noise.app is playing.
+- `bg ascii` (home or focus) shows the same animated ASCII art as home behind the stage; desktop stops it. `bg noise` drives the audio backdrop from whatever noise.app is playing.
 - `quote now` shows the current quote and why it was picked.
 - `noise deep-work` plays a preset; `noise light-rain 60` adds light rain at 60%; `noise list` shows every sound and preset. Nothing plays until you ask, and your last mix comes back (silent) on reload.
 - `noise cafe` plays the café preset; `noise cafe 50` adds just the café layer at 50% (a name that is both a preset and a layer is the preset unless you give a volume). `noise light-rain 0` is the same as `noise off light-rain`.
@@ -100,7 +99,7 @@ system  open|close|max <app> · ls · layout reset · theme <name> · name|city 
 | `games.js` | Snake and the typing test |
 | `fun.js` | cowsay, neofetch, 8ball, the matrix screen and the calculator |
 | `viz.js` | The audio visualizer (parked). Three.js is vendored in `vendor/` (r170, MIT) and loads only when `viz.app` opens with `VIZ_ENABLED`. |
-| `backdrop.js` | Focus/zen stage backgrounds: `off`, `ascii` (shared home art), `audio`, `drift`, `grid`, `scan`, `glow`. |
+| `backdrop.js` | Home and focus stage backgrounds: `off`, `ascii` (shared home art), `audio`, `drift`, `grid`, `scan`, `glow`. |
 | `map.js` | The world map: coastlines from Natural Earth, cached in the browser after the first load |
 
 ## Local preview

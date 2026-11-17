@@ -145,19 +145,63 @@ export function imageArtPiece(d) {
 /**
  * Plays one piece inside `host`, scaled to cover it (or fit inside it).
  * show(source, opts): source is a slug or a piece module { meta, default }.
- * opts: look, mono (one colour: the host's css color), fit ("cover" | "fit"), speed, reduce.
+ * opts: look, mono (one colour: the host's css color), fit ("cover" | "fit"), speed, reduce,
+ *   cell (largest character size in px, 0 = no cap),
+ *   layout ("centre": one copy in the middle, edges fading by `fade` percent where it is smaller than the host |
+ *           "tile": mirrored copies so a capped size still fills the host edge to edge).
  */
 export function artStage(host, { onChange } = {}) {
-  let wrap = null, pre = null, meta = null, stopPlay = null, cur = null, token = 0, ro = null, resizeT = 0, active = false;
+  let wrap = null, pre = null, meta = null, stopPlay = null, cur = null, token = 0, ro = null, resizeT = 0, active = false, tileCv = null;
+  const MAX_TILES = 49, FINE_PX = 11; // a piece has a fixed grid (192 columns at most), so fine characters mean a smaller piece
   const size = () => {
     if (!pre || !meta) return;
     const W = host.clientWidth, H = host.clientHeight;
     if (!W || !H) return;
-    const a = cellAspect(meta), fx = W / (meta.cols * CELL_W), fy = H / (meta.rows * CELL_W * a);
+    const o = cur.opts, tiled = o.layout === "tile", a = cellAspect(meta), cw = meta.cols * CELL_W, ch = meta.rows * CELL_W * a, fx = W / cw, fy = H / ch;
     // cover, but never blow a narrow strip up past ~2.4x the stage: the canvas would get huge for no gain
-    const px = cur.opts.fit === "fit" ? Math.min(fx, fy) * 0.9 : Math.min(Math.max(fx, fy), Math.min(fx, fy) * 2.4);
-    pre.style.fontSize = `${clamp(px, 3, 96).toFixed(2)}px`;
+    let px = o.fit === "fit" && !tiled ? Math.min(fx, fy) * 0.9 : Math.min(Math.max(fx, fy), Math.min(fx, fy) * 2.4);
+    if (o.layout !== "fill") px = Math.min(px, FINE_PX); // centred and tiled keep the fine size; only "fill" scales the piece up to the screen
+    px = clamp(px, 3, 96);
+    // tiles must stay few: past MAX_TILES the characters grow instead
+    if (tiled) { const n = Math.ceil(W / (cw * px)) * Math.ceil(H / (ch * px)); if (n > MAX_TILES) px = clamp(px * Math.sqrt(n / MAX_TILES), 3, 96); }
+    pre.style.fontSize = `${px.toFixed(2)}px`;
+    wrap.classList.toggle("art--tiled", tiled);
+    if (tiled) { sizeTiles(W, H, cw * px, ch * px); return; }
+    // centred: where the piece is smaller than the stage its edges dissolve; where it overflows they stay put
+    const f = clamp(o.fade ?? 0, 0, 100) / 2;
+    wrap.style.setProperty("--fx", cw * px < W - 1 ? `${f}%` : "0%");
+    wrap.style.setProperty("--fy", ch * px < H - 1 ? `${f}%` : "0%");
   };
+  // one drawing of the piece, copied (and mirrored, so seams match) across the whole host
+  function sizeTiles(W, H, tw, th) {
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    if (!tileCv) { tileCv = document.createElement("canvas"); tileCv.className = "art__tiles"; tileCv.setAttribute("aria-hidden", "true"); wrap.append(tileCv); }
+    if (tileCv.width !== Math.round(W * dpr) || tileCv.height !== Math.round(H * dpr)) { tileCv.width = Math.round(W * dpr); tileCv.height = Math.round(H * dpr); }
+    tileCv.style.width = `${W}px`; tileCv.style.height = `${H}px`;
+    tileCv._g = { W, H, tw, th, dpr, bleed: clamp(cur.opts.bleed ?? 100, 0, 100) / 100 };
+    blit();
+  }
+  function blit() {
+    const src = pre?._canvas, g = tileCv?._g;
+    if (!src || !g || !src.width) return;
+    const ctx = tileCv.getContext("2d"), { W, H, tw, th, dpr, bleed } = g;
+    // an odd count keeps one unmirrored copy in the middle; the overhang is cropped evenly
+    const nx = Math.ceil(W / tw) | 1, ny = Math.ceil(H / th) | 1, ox = (W - nx * tw) / 2, oy = (H - ny * th) / 2;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const x = ox + i * tw, y = oy + j * th;
+      if (x + tw < 0 || y + th < 0 || x > W || y > H) continue;
+      ctx.save();
+      // the middle copy is full strength; each ring outward gets dimmer, so the piece bleeds into the screen
+      const ring = Math.max(Math.abs(i - (nx - 1) / 2), Math.abs(j - (ny - 1) / 2));
+      ctx.globalAlpha = ring === 0 ? 1 : Math.min(1, bleed / ring);
+      ctx.translate(x + (i & 1 ? tw : 0), y + (j & 1 ? th : 0));
+      ctx.scale(i & 1 ? -1 : 1, j & 1 ? -1 : 1);
+      ctx.drawImage(src, 0, 0, tw, th);
+      ctx.restore();
+    }
+  }
   const drop = (el, stop, fade) => {
     if (!el) return;
     if (!fade) { stop?.(); el.remove(); return; }
@@ -171,11 +215,13 @@ export function artStage(host, { onChange } = {}) {
     pre = document.createElement("pre");
     wrap.append(pre);
     host.append(wrap);
+    tileCv = null;
     meta = mod.meta;
     wrap.dataset.ink = o.mono || meta.category === "custom" ? "theme" : "plain"; // which css colour un-coloured cells take
     size();
     stopPlay = play(pre, withParams(mod, {}), {
       speed: o.speed || 1, still: !!o.reduce, maxFps: 30,
+      onFrame: o.layout === "tile" ? blit : undefined,
       look: { look: o.look && o.look !== "original" ? o.look : undefined, mono: !!o.mono },
     });
     drop(old, oldStop, !o.reduce);
@@ -210,7 +256,7 @@ export function artStage(host, { onChange } = {}) {
     ro?.disconnect(); ro = null; clearTimeout(resizeT);
     stopPlay?.(); stopPlay = null;
     host.replaceChildren();
-    wrap = pre = meta = null;
+    wrap = pre = meta = tileCv = null;
   }
   return { show, start, stop, get running() { return active; }, get meta() { return meta; } };
 }

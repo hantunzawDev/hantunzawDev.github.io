@@ -27,6 +27,14 @@ export const DEFAULT_LINKS = [
   "site | https://www.hantunzaw.dev",
 ].join("\n");
 
+// home widgets: which are on, which of the 3×3 zones holds each, its quarter turn, and its size
+export const DEFAULT_WIDGETS = {
+  clock:   { on: true,  z: "c",  rot: 0, size: 1, ta: "auto", sa: "auto" },
+  todo:    { on: false, z: "tr", rot: 0, size: 1, ta: "auto", sa: "auto" },
+  weather: { on: false, z: "tl", rot: 0, size: 1, ta: "auto", sa: "auto" },
+  quote:   { on: false, z: "bc", rot: 0, size: 1, ta: "auto", sa: "auto" },
+  focus:   { on: false, z: "br", rot: 0, size: 1, ta: "auto", sa: "auto" },
+};
 const SETTINGS_DEFAULTS = {
   name: "Han", city: "Yangon", h24: true, theme: "lime", links: DEFAULT_LINKS,
   snap: true, tile: false, tileLayout: "bento", mfact: 0.55, gap: 8,
@@ -36,7 +44,11 @@ const SETTINGS_DEFAULTS = {
   qRotation: "hourly", qMatch: true, qp_dev: true, qp_stoic: true, qp_motivation: true, qp_rest: true, qCustom: "",
   homeArt: "marine-drive-necklace", homeLook: "original", homeMono: false, homeFit: "cover", homeDim: 60, homeSpeed: 1,
   homeText: "", homeFps: 6, homeFx: "glint",
+  homeW: DEFAULT_WIDGETS, homeLayout: "centre", homeFade: 40, homeBleed: 40, homeContrast: 100, homeX: 0, homeY: 0,
 };
+// the home art's look-and-placement keys: what "reset art display" puts back (not the piece or your own art)
+export const ART_DISPLAY_KEYS = ["homeLook", "homeMono", "homeFit", "homeDim", "homeSpeed", "homeLayout", "homeFade", "homeBleed", "homeContrast", "homeX", "homeY"];
+export const artDisplayDefaults = () => Object.fromEntries(ART_DISPLAY_KEYS.map((k) => [k, SETTINGS_DEFAULTS[k]]));
 export const settings = { ...SETTINGS_DEFAULTS };
 // copy saved fields one by one: skip prototype keys and any field whose type no longer matches
 for (const [k, v] of Object.entries(store.get("settings", {}))) {
