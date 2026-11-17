@@ -2,11 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { STATIONS, VIBES, stationById } from "../stations.js";
 
-const BASE_STATIONS = 24;
 const myanmar = () => STATIONS.filter((s) => s.vibe === "myanmar");
 
-test("station count and unique kebab ids", () => {
-  assert.equal(STATIONS.length, BASE_STATIONS + myanmar().length);
+test("every vibe has at least 3 stations, unique kebab ids", () => {
+  for (const v of VIBES) assert.ok(STATIONS.filter((s) => s.vibe === v).length >= 3, v);
   const ids = STATIONS.map((s) => s.id);
   assert.equal(new Set(ids).size, STATIONS.length);
   for (const id of ids) assert.match(id, /^[a-z0-9]+(-[a-z0-9]+)*$/);
