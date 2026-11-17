@@ -11,18 +11,20 @@
 // toggle retries). Looping is an overlap crossfade (looper.js): copies of the
 // same buffer start one `period` apart and cross over `fade` seconds on an
 // equal-power curve, each with its own envelope gain. Copies are queued from a
-// 200 ms ticker up to HORIZON seconds ahead of ctx.currentTime, so a throttled
-// background tab keeps time. Buffers under NATIVE_BELOW seconds use loop=true.
-// The first copy starts at a random offset so two beds never phase-lock. A
-// catalogue row may set its own `fade` (seconds) where the recording has a
-// steady rhythm, so the copies' beats land on each other.
+// 200 ms ticker up to HORIZON seconds ahead of ctx.currentTime, and always at
+// least one whole copy beyond the one sounding (period + 1 s), so a throttled
+// background tab whose timers fire late (or once a minute) keeps time as long
+// as a stall is shorter than the file. Buffers under NATIVE_BELOW seconds use
+// loop=true. The first copy starts at a random offset so two beds never
+// phase-lock. A catalogue row may set its own `fade` (seconds) where the
+// recording has a steady rhythm, so the copies' beats land on each other.
 //
 // Builders (tones, the three streamed Myanmar recordings) are `(h, t0) => ...`
 // functions wired into the small toolbox below; they sound immediately.
 //
 // Gain per instance = vol × trim. Start/stop fade with setTargetAtTime (τ 0.08,
 // ~99% in 0.4 s), volume moves glide (τ 0.08); disposal waits DISPOSE_MS, after
-// the fade has finished, never mid-ramp.
+// the fade has finished (below -80 dB), never mid-ramp.
 //
 // level(id) reads a small AnalyserNode (fftSize 256) on each live instance's
 // output gain, so it follows the actual sound × volume; smoothing state lives
@@ -48,7 +50,7 @@ const LEAD = 0.03;            // first copy starts this far ahead (lets the grap
 const MICRO = 0.02;           // first copy's own tiny fade-in (no click at a random offset)
 const VOL_TC = 0.08;          // volume glide
 const EDGE_TC = 0.08;         // start / stop fade: 5τ = 0.4 s
-const DISPOSE_MS = 500;       // after the stop fade has landed
+const DISPOSE_MS = 750;       // after the stop fade has landed: e^(-0.75/0.08) ≈ -81 dB, so the hard stop is inaudible
 const LEVEL_FFT = 256;
 const LEVEL_GAIN = 16;        // RMS → 0..1: a loudness-matched sound at vol 1 reads ~0.7 (measured on white-noise in Chrome)
 const MB = 2 ** 20;
@@ -167,7 +169,9 @@ export function createSampler({
 
   function pump(inst, t) {
     if (!inst.plan || inst.disposed) return;
-    while (inst.next < t + HORIZON) {
+    // queue the next whole copy too, so one late tick cannot leave a gap
+    const ahead = Math.max(HORIZON, inst.plan.period + 1);
+    while (inst.next < t + ahead) {
       if (inst.next < t) copy(inst, t + LEAD, 0, true); // fell behind (frozen tab): restart cleanly
       else copy(inst, inst.next, 0, false);
     }

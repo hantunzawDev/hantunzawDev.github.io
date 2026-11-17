@@ -74,6 +74,12 @@ function fakeClock(ctx) {
     clearInterval: (id) => timers.delete(id),
     now: () => ms,
     // move wall clock and audio clock together, firing due timers in order
+    // a frozen tab: audio time moves on, no timer fires (all due times slide)
+    stall(d) {
+      ms += d; ctx.currentTime = ms / 1000;
+      for (const t of timers.values()) t.at += d;
+      for (const s of ctx.sources) if (s.onended && s.stopAt <= ctx.currentTime) { const f = s.onended; s.onended = null; f(); }
+    },
     advance(d) {
       const end = ms + d;
       for (;;) {
@@ -239,8 +245,9 @@ test("1.2 s buffer: fade <= 0.4, second copy starts one period after the first",
   clock.advance(20000); await flush();
   const all = ctx.sources.map((s) => s.startAt).sort((a, b) => a - b);
   for (let i = 1; i < all.length; i++) assert.ok(Math.abs(all[i] - all[i - 1] - period) < 1e-6, `gap ${i}`);
-  // sounding + queued copies are bounded by (duration + horizon + one tick) / period
-  assert.ok(ctx.playing().length <= Math.ceil((1.2 + 1.5 + 0.2) / period) + 1, `queued ${ctx.playing().length}`);
+  // sounding + queued copies are bounded by (duration + look-ahead + one tick) / period
+  const ahead = Math.max(1.5, period + 1);
+  assert.ok(ctx.playing().length <= Math.ceil((1.2 + ahead + 0.2) / period) + 1, `queued ${ctx.playing().length}`);
 });
 
 test("short buffers never crossfade longer than a third of their length", async () => {
@@ -367,7 +374,7 @@ test("eviction never drops a fading or a still-loading sound", async () => {
   L.set("c", 0.5);                 // c's fetch is held: loading
   await flush();
   assert.equal(L.status("c"), "loading");
-  L.off("a"); clock.advance(100);  // a is fading (disposal at 500 ms)
+  L.off("a"); clock.advance(100);  // a is fading (disposal at 750 ms)
   L.set("d", 0.5);
   for (let i = 0; i < 4; i++) await flush(); // d decodes while a is still fading: over the cap
   assert.ok(names(s).includes("a"), "fading a kept");
@@ -425,4 +432,22 @@ test("a row's own fade sets the copy gap: second copy at dur - fade", async () =
   await settle(r2.clock, 28000);
   const s2 = startsOf(r2.ctx);
   assert.ok(Math.abs(s2[1] - s2[0] - (30 - 1.5)) < 1e-6, `default gap ${s2[1] - s2[0]}`);
+});
+
+test("a throttled ticker: one late pump after a long stall leaves no gap", async () => {
+  const { L, ctx, clock } = rig();
+  L.set("x", 0.5);             // 30 s file, period 28.5
+  await settle(clock, 400);
+  clock.stall(27000);          // ~27 s with no tick at all (shorter than the file)
+  clock.advance(200);          // a single late tick
+  clock.stall(20000);          // and another long freeze
+  clock.advance(200);
+  const st = ctx.sources.slice().sort((a, b) => a.startAt - b.startAt);
+  assert.ok(st.length >= 3, `copies ${st.length}`);
+  for (let i = 1; i < st.length; i++) {
+    assert.ok(st[i].startAt <= st[i - 1].stopAt + 1e-9, `gap before copy ${i}: ${st[i].startAt} > ${st[i - 1].stopAt}`);
+    assert.ok(Math.abs(st[i].startAt - st[i - 1].startAt - 28.5) < 1e-6, `copy ${i} on the loop grid, not a restart`);
+  }
+  // something is always sounding from the first copy to now
+  assert.ok(ctx.playing().length >= 1);
 });
