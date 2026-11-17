@@ -451,3 +451,23 @@ test("a throttled ticker: one late pump after a long stall leaves no gap", async
   // something is always sounding from the first copy to now
   assert.ok(ctx.playing().length >= 1);
 });
+
+test("long decodes keep only their first 60 s; a 70 s buffer is untouched", async () => {
+  const { L, s, ctx, clock } = rig();
+  L.set("long", 0.5); L.set("mid", 0.5);
+  await settle(clock, 400);
+  const long = ctx.sources.filter((x) => x.buffer?.duration === 60);
+  const mid = ctx.sources.filter((x) => x.buffer?.duration === 70);
+  assert.ok(long.length >= 1, "120 s buffer stored as 60 s");
+  assert.ok(mid.length >= 1, "70 s buffer kept whole");
+  assert.ok(ctx.sources.every((x) => x.buffer.duration !== 120), "the 120 s original is never played");
+  const b = long[0].buffer;
+  assert.equal(b.numberOfChannels, 2); assert.equal(b.sampleRate, 48000);
+  assert.deepEqual(b.copied, [[0, 60 * 48000], [1, 60 * 48000]], "both channels copied, first 60 s");
+  // loop plan uses the stored length: copies 60 - 1.5 apart
+  const st = long.map((x) => x.startAt).sort((p, q) => p - q);
+  assert.ok(st.length >= 2);
+  assert.ok(Math.abs(st[1] - st[0] - 58.5) < 1e-6, `long gap ${st[1] - st[0]}`);
+  // the cache accounts the clipped size
+  assert.deepEqual(names(s).sort(), ["long", "mid"]);
+});

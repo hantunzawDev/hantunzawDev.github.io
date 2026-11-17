@@ -26,6 +26,9 @@
 // ~99% in 0.4 s), volume moves glide (τ 0.08); disposal waits DISPOSE_MS, after
 // the fade has finished (below -80 dB), never mid-ramp.
 //
+// Long recordings are cut to their first MAX_DECODED_S seconds after decoding
+// (see clip()), so a mix of long beds holds tens of MB of PCM, not hundreds.
+//
 // level(id) reads a small AnalyserNode (fftSize 256) on each live instance's
 // output gain, so it follows the actual sound × volume; smoothing state lives
 // on the instance (no per-call allocation) and non-live ids return 0.
@@ -51,6 +54,13 @@ const MICRO = 0.02;           // first copy's own tiny fade-in (no click at a ra
 const VOL_TC = 0.08;          // volume glide
 const EDGE_TC = 0.08;         // start / stop fade: 5τ = 0.4 s
 const DISPOSE_MS = 750;       // after the stop fade has landed: e^(-0.75/0.08) ≈ -81 dB, so the hard stop is inaudible
+// Decoded recordings longer than CLIP_ABOVE_S keep only their first
+// MAX_DECODED_S seconds. Trade-off: such a bed repeats its first minute instead
+// of its whole length (the crossfade hides the seam; a minute of rain or a cafe
+// does not read as a loop), in exchange for 60 s of PCM per sound instead of up
+// to ~270 s (a 4-bed mix of long beds went from ~300-650 MB to ~90 MB).
+const MAX_DECODED_S = 60;
+const CLIP_ABOVE_S = 75;      // a little over the cut, so a 62 s file is not trimmed by 2 s
 const LEVEL_FFT = 256;
 const LEVEL_GAIN = 16;        // RMS → 0..1: a loudness-matched sound at vol 1 reads ~0.7 (measured on white-noise in Chrome)
 const MB = 2 ** 20;
@@ -115,6 +125,7 @@ export function createSampler({
         return res.arrayBuffer();
       })
       .then((ab) => c.decodeAudioData(ab))
+      .then((buf) => clip(c, buf))
       .then((buf) => {
         e.buf = buf;
         e.bytes = (buf.length || 0) * (buf.numberOfChannels || 1) * 4;
@@ -126,6 +137,16 @@ export function createSampler({
       });
     cache.set(L.src, e);
     return e.p;
+  }
+
+  // a decoded buffer over CLIP_ABOVE_S seconds becomes a copy of its first
+  // MAX_DECODED_S seconds (same channels and rate); the original is dropped
+  function clip(c, buf) {
+    if (!(buf.duration > CLIP_ABOVE_S)) return buf;
+    const n = Math.round(MAX_DECODED_S * buf.sampleRate);
+    const out = c.createBuffer(buf.numberOfChannels, n, buf.sampleRate);
+    for (let ch = 0; ch < buf.numberOfChannels; ch++) out.copyToChannel(buf.getChannelData(ch).subarray(0, n), ch);
+    return out;
   }
 
   // keep memory bounded: over the cap, drop decoded buffers nobody uses, oldest
