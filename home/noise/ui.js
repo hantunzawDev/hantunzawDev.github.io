@@ -277,16 +277,24 @@ function nowPlaying(st) {
 }
 const layerSummary = (act) => Object.keys(act).map((id) => `${nameOf(id)} ${pct(act[id])}`).join(" · ");
 const soundsTitle = (ids) => (ids.length > 2 ? `${ids.length} sounds` : ids.map(nameOf).join(" + "));
+// the selection minus sounds whose load failed: what the counts and names describe
+const audible = (act) => Object.fromEntries(Object.entries(act).filter(([id]) => layers.status(id) !== "failed"));
+// "rain + café · 1 failed"; all failed: "2 sounds failed"
+function withFailed(title, bad) {
+  if (!bad) return title;
+  return title ? `${title} · ${bad} failed` : `${bad} sound${bad === 1 ? "" : "s"} failed`;
+}
 
 function info() {
-  const act = layers.active(), ids = Object.keys(act);
+  const sel = layers.active(), act = audible(sel), ids = Object.keys(act);
+  const bad = Object.keys(sel).length - ids.length;
   const p = activePreset ? allPresets().find((x) => x.id === activePreset) : null;
   const plus = ids.length ? ` + ${soundsTitle(ids)}` : "";
   if (pick === "radio" && state.station) {
     const st = stationById(state.station), np = nowPlaying(st);
     return { tag: "fm", name: st.name, desc: np ? `♪ ${np}` : `${st.vibe} radio${plus}` };
   }
-  const name = p ? p.name : ids.length ? soundsTitle(ids) : muted.size ? "all muted" : "";
+  const name = withFailed(p ? p.name : ids.length ? soundsTitle(ids) : bad ? "" : muted.size ? "all muted" : "", bad);
   return { tag: "mix", name, desc: ids.length ? layerSummary(act) : muted.size ? `${muted.size} muted` : "" };
 }
 
@@ -476,16 +484,16 @@ function render() {
   R.root.dataset.state = engine.state;
 
   // readout
-  const i = info();
+  const i = info(), aud = audible(act), heard = Object.keys(aud).length;
   if (pick === "radio" && st) {
     R.title.textContent = st.name;
     R.title.classList.add("is-long");
     const np = nowPlaying(st);
-    R.sub.textContent = np ? `♪ ${np}` : ids.length ? `+ ${layerSummary(act)}` : (radio.analysed || !live ? `${st.vibe} radio` : "playing direct · no viz");
+    R.sub.textContent = np ? `♪ ${np}` : heard ? `+ ${layerSummary(aud)}` : (radio.analysed || !live ? `${st.vibe} radio` : "playing direct · no viz");
   } else {
     R.title.textContent = i.name || "silence";
     R.title.classList.toggle("is-long", (i.name || "").length > 18);
-    R.sub.textContent = ids.length ? layerSummary(act) : muted.size ? `${muted.size} muted in the mix` : "rain, brown noise, a café… or a preset";
+    R.sub.textContent = heard ? layerSummary(aud) : muted.size ? `${muted.size} muted in the mix` : ids.length ? "" : "rain, brown noise, a café… or a preset";
   }
   const si = statusInfo();
   R.status.dataset.k = si.cls;
@@ -530,8 +538,9 @@ function render() {
 function renderMeta() {
   const R = ui;
   if (!R?.meta) return;
-  const sl = engine.sleepLeft(), n = Object.keys(layers.active()).length;
-  const what = pick === "radio" ? "radio" : `${n} sound${n === 1 ? "" : "s"}`;
+  const sel = Object.keys(layers.active()), n = Object.keys(audible(layers.active())).length, bad = sel.length - n;
+  const sl = engine.sleepLeft();
+  const what = pick === "radio" ? "radio" : `${n} sound${n === 1 ? "" : "s"}${bad ? ` · ${bad} failed` : ""}`;
   const text = isLive() ? `${engine.state === "paused" ? "paused" : "▶"} ${what}${sl ? " · ☾ " + mmss(sl) : ""}` : "";
   if (R.meta.textContent !== text) R.meta.textContent = text;
 }

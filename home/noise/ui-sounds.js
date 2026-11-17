@@ -136,7 +136,7 @@ export function buildSounds(R) {
     let on = 0;
     for (const [id, T] of S.tiles) {
       const k = tileState(id, act, muted), v = act[id] ?? muted.get(id) ?? 0;
-      if (id in act) on++;
+      if (id in act && k !== "failed") on++; // a failed sound is selected but silent
       if (k !== T.k) {
         T.k = k;
         T.el.dataset.state = k;
@@ -234,7 +234,7 @@ export function buildSounds(R) {
     const cat = R.cat();
     if (cat !== S.cat) showCat(cat);
     const counts = {};
-    for (const id of Object.keys(act)) { const g = layerOf(id)?.group; if (g) counts[g] = (counts[g] || 0) + 1; }
+    for (const id of Object.keys(act)) { const g = R.status(id) !== "failed" && layerOf(id)?.group; if (g) counts[g] = (counts[g] || 0) + 1; }
     rail.update({ active: cat, counts });
     renderTiles(act, muted);
     renderStrip(act, muted);
