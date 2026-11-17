@@ -791,7 +791,7 @@ function syncDock() {
   $$("#dock .task").forEach((b) => b.toggleAttribute("aria-current", b.dataset.app === cur));
 }
 
-/* ---------- menubar menus: ◆ hzOS · apps · view ---------- */
+/* ---------- menubar menus: hzOS · apps · view ---------- */
 const APP_GROUPS = [
   ["desk", ["clock", "wx", "map", "fortune"]],
   ["work", ["todo", "notes", "focus", "feed", "term"]],
@@ -2747,8 +2747,6 @@ addEventListener("keydown", (e) => {
 /* =========================================================
    status + refresh
    ========================================================= */
-function net() { const on = navigator.onLine, el = $("#st-net"); el.title = on ? "online" : "offline"; el.firstElementChild.textContent = el.title; el.classList.toggle("off", !on); }
-addEventListener("online", net); addEventListener("offline", net);
 async function refreshAll() {
   log("refreshing wx and feed…");
   await Promise.allSettled([loadWx(true), loadFeed(feedSrc, true)]);
@@ -2889,7 +2887,6 @@ async function start() {
   matchMedia("(max-width: 900px)").addEventListener("change", onResize); // stacked <-> desktop, even without a resize event
   renderDock();
   front("clock");
-  net();
   renderTodo();
   notesMeta();
   renderFocus(); renderFocusMeta();

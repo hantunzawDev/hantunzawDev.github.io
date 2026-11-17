@@ -221,9 +221,6 @@ body:not([data-mode="desktop"]) .modes { border-color: var(--lime); box-shadow: 
 .chip--btn:active { transform: translate(1px, 1px); }
 @media (hover: hover) and (pointer: fine) { .chip--btn:hover { color: var(--lime); border-color: var(--lime); } }
 .chip__glyph { display: inline-grid; place-items: center; }
-.chip--net { padding: 0 6px; }
-.chip--net::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--lime); box-shadow: var(--glow); }
-.chip--net.off::before { background: var(--red); box-shadow: none; }
 .menubar__clock { display: inline-flex; gap: 10px; padding: 0 4px 0 10px; margin-left: 4px; border-left: 1px solid var(--line); }
 #st-time { color: var(--text); }
 body:not([data-mode="desktop"]) .menu[data-menu="layout"] { visibility: hidden; }
