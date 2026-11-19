@@ -78,9 +78,27 @@ const str = (c) => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
 export function bughunt(root, { setMeta, log }) {
   const canvas = h("canvas", { tabIndex: 0, ariaLabel: "bughunt. Click to play. WASD to move, arrows or mouse to turn, space or click to fire, M for map." });
   canvas.style.touchAction = "none";
-  const hud = h("p", { className: "game__hud" });
-  const board = h("div", { className: "game__board" }, canvas);
-  root.replaceChildren(hud, board);
+  // Text lives in DOM layers over the canvas, not in its 320px pixels: crisp at
+  // any window size, themeable, and the toast doubles as captions for the cues.
+  const stat = (cls, label) => {
+    const v = h("b"), meter = h("span", { className: "bh-meter" });
+    meter.setAttribute("aria-hidden", "true");
+    return { n: h("div", { className: `bh-stat ${cls}` }, h("span", { className: "bh-k", textContent: label }), h("span", { className: "bh-v" }, meter, v)), v, meter };
+  };
+  const sHp = stat("bh-hp", "hp"), sCells = stat("bh-cells", "cells"), sBugs = stat("bh-bugs", "bugs"), sScore = stat("bh-score", "score");
+  const hud = h("div", { className: "bh-hud" }, sHp.n, sCells.n, sBugs.n, sScore.n);
+  const elBanner = h("div", { className: "bh-banner" });
+  elBanner.setAttribute("aria-hidden", "true");
+  const elToast = h("p", { className: "bh-toast", role: "status" });
+  elToast.setAttribute("aria-live", "polite");
+  const card = h("div", { className: "bh-card" });
+  const veil = h("div", { className: "bh-veil" }, card);
+  const screen = h("div", { className: "bh-screen" }, canvas, elBanner, elToast, veil);
+  const footSector = h("span", { className: "bh-sector" }), footSnd = h("kbd");
+  const foot = h("div", { className: "bh-foot" }, footSector, h("span", { className: "bh-hint" }, h("kbd", { textContent: "m" }), " map ", footSnd));
+  const shell = h("div", { className: "bh" }, hud, screen, foot);
+  const board = h("div", { className: "game__board" }, shell);
+  root.replaceChildren(board);
   const ctx = canvas.getContext("2d");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -91,7 +109,7 @@ export function bughunt(root, { setMeta, log }) {
   // game state
   let state = "title"; // title | play | dead | won
   let lvl, grid, ents, P, keys = new Set(), score = 0, hp = 100, ammo = 30;
-  let shootCd = 0, flash = 0, hurt = 0, banner = 0, bob = 0, showMap = false, msg = "", msgT = 0;
+  let shootCd = 0, flash = 0, hurt = 0, bob = 0, showMap = false, msgT = 0;
   let raf = 0, last = 0, dirty = true, focused = false;
   let touch = null, touchMove = 0;
   // feel: screen shake, hit markers, debris, enemy tracers, damage direction
@@ -160,7 +178,7 @@ export function bughunt(root, { setMeta, log }) {
     let bestA = 0, bestD = 0;
     for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4, d = rayDist(P.x, P.y, a); if (d > bestD) { bestD = d; bestA = a; } }
     P.a = bestA;
-    banner = 2.2; fade = 0.6; dirty = true;
+    fade = 0.6; dirty = true;
     parts = []; zaps = []; dmgDirs = [];
   }
   const cell = (x, y) => grid[y | 0]?.[x | 0] ?? "#";
@@ -174,6 +192,7 @@ export function bughunt(root, { setMeta, log }) {
   }
   function newGame() {
     score = 0; hp = 100; ammo = 30; load(0); state = "play";
+    showBanner();
     say("find and squash every bug, then take the exit.");
     sfx.unlock(); sfx.start();
     soundtrack.sector(0);
@@ -188,7 +207,18 @@ export function bughunt(root, { setMeta, log }) {
     }
     if (parts.length > 160) parts.splice(0, parts.length - 160);
   }
-  function say(t) { msg = t; msgT = 3; }
+  // restart a one-shot CSS animation on an element
+  function replay(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  function say(t) {
+    msgT = 3;
+    elToast.textContent = t;
+    replay(elToast, "on");
+  }
+  function showBanner() {
+    const [, path] = LEVELS[lvl].name.split(" · ");
+    elBanner.replaceChildren(h("span", { textContent: `sector ${lvl + 1} / ${LEVELS.length}` }), h("b", { textContent: path }));
+    replay(elBanner, "on");
+  }
 
   /* ---------- movement ---------- */
   const R = 0.22;
@@ -222,7 +252,7 @@ export function bughunt(root, { setMeta, log }) {
       }
     }
     if ((k(" ") || k("f")) && shootCd <= 0) fire();
-    shootCd -= dt; flash -= dt; hurt -= dt; banner -= dt; msgT -= dt; hitMark -= dt; fade -= dt;
+    shootCd -= dt; flash -= dt; hurt -= dt; msgT -= dt; hitMark -= dt; fade -= dt;
     if (shake > 0) { shake -= dt; shakeMag *= Math.exp(-dt * 6); }
 
     // only two bugs may be winding up a shot at once: a crowd is pressure, not a firing squad
@@ -306,6 +336,7 @@ export function bughunt(root, { setMeta, log }) {
       return;
     }
     load(lvl + 1);
+    showBanner();
     ammo += 10;
     sfx.clear(); soundtrack.sector(lvl);
     log?.(`bughunt: ${LEVELS[lvl - 1].name} clear.`, "ok");
@@ -443,9 +474,7 @@ export function bughunt(root, { setMeta, log }) {
     if (showMap) drawMap();
     // shake is a temporary offset on the whole view, never on the aim
     canvas.style.transform = state === "play" && focused && shake > 0 && shakeMag > 0.2 ? `translate(${((Math.random() * 2 - 1) * shakeMag).toFixed(1)}px,${((Math.random() * 2 - 1) * shakeMag).toFixed(1)}px)` : "";
-    text(banner > 0 && state === "play" ? LEVELS[lvl].name : "", H * 0.22, 11);
-    if (msgT > 0 && state === "play") text(msg, H - 10, 8, 0.85);
-    if (state !== "play" || !focused) overlay();
+    veilUpdate();
     hudUpdate();
   }
   function drawWeapon() {
@@ -536,30 +565,43 @@ export function bughunt(root, { setMeta, log }) {
     ctx.fillRect(ox + (P.x + Math.cos(P.a)) * s - 0.5, oy + (P.y + Math.sin(P.a)) * s - 0.5, 1, 1);
     ctx.globalAlpha = 1;
   }
-  function text(t, y, px, alpha = 1) {
-    if (!t) return;
-    ctx.font = `${px}px "Martian Mono", monospace`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = str(pal.bg); ctx.fillText(t, W / 2 + 1, y + 1);
-    ctx.fillStyle = str(pal.text); ctx.fillText(t, W / 2, y);
-    ctx.globalAlpha = 1;
-  }
-  function overlay() {
-    ctx.fillStyle = pal.light ? "rgba(242,239,230,0.75)" : "rgba(0,0,0,0.6)";
-    ctx.fillRect(0, H / 2 - 30, W, 60);
-    const lines = {
-      title: ["BUGHUNT.EXE", "click or space to start"],
-      dead: ["segfault · you died", `score ${score} · space to retry`],
-      won: ["all sectors clean", `score ${score} · best ${best} · space`],
-    }[state] || ["paused", "click to resume"];
-    text(lines[0], H / 2 - 12, 12);
-    text(lines[1], H / 2 + 6, 8, 0.85);
-    text(soundLabel(), H / 2 + 19, 6, 0.55);
-  }
+  const sndState = () => (soundtrack.muted ? (sfx.muted ? "off" : "sfx") : "on");
   function soundLabel() {
-    if (sfx.muted && soundtrack.muted) return "sound off · n to turn on";
-    if (soundtrack.muted) return "sfx only · n to cycle sound";
-    return "score by noise.app · n to cycle sound";
+    const snd = sndState();
+    if (snd === "off") return "sound off · n to turn on";
+    if (snd === "sfx") return "sfx only · n to cycle sound";
+    return "♪ score by noise.app · n to cycle sound";
+  }
+  // title / death / win / pause card over the view
+  const KEYS = [["wasd", "move"], ["mouse ← →", "turn"], ["click space", "fire"], ["shift", "run"], ["m", "map"], ["n", "sound"]];
+  let veilKey = "";
+  function veilUpdate() {
+    const mode = state !== "play" ? state : focused ? "" : "paused";
+    const key = `${mode}|${score}|${best}|${lvl}|${sndState()}`;
+    if (key === veilKey) return;
+    veilKey = key;
+    shell.dataset.mode = mode || "play";
+    veil.hidden = !mode;
+    if (!mode) return;
+    elToast.classList.remove("on");
+    const stats = (...rows) => h("div", { className: "bh-stats" }, ...rows.map(([k, v]) => h("span", {}, h("small", { textContent: k }), h("b", { textContent: v }))));
+    const go = (label) => h("button", { type: "button", className: "bh-go" }, label, h("kbd", { textContent: "space" }));
+    const keys = h("dl", { className: "bh-keys" }, ...KEYS.flatMap(([k, d]) => [h("dt", {}, ...k.split(" ").map((x) => h("kbd", { textContent: x }))), h("dd", { textContent: d })]));
+    const snd = h("p", { className: "bh-snd", textContent: soundLabel() });
+    const kick = (t) => h("p", { className: "bh-kick", textContent: t });
+    const title = (t, sub) => h("h2", { className: "bh-title" }, t, sub ? h("small", { textContent: sub }) : null);
+    const sub = (t) => h("p", { className: "bh-sub", textContent: t });
+    const newBest = score > 0 && score >= best;
+    const parts = {
+      title: [kick(`${LEVELS.length} sectors · 1 blaster`), title("BUGHUNT", ".exe"), sub("squash every bug in the sector, then walk into the exit."), go("start"), keys,
+        h("p", { className: "bh-snd" }, best ? `best ${best} · ` : "", soundLabel())],
+      dead: [kick(`fatal · ${LEVELS[lvl].name}`), title("SEGFAULT"), sub("core dumped. the bugs won this round."),
+        stats(["score", score], ["best", best], ["sector", `${lvl + 1}/${LEVELS.length}`]), go("retry"), snd],
+      won: [kick("exit 0 · all sectors clean"), title("PATCHED"), newBest ? h("p", { className: "bh-badge", textContent: "new best" }) : null,
+        stats(["score", score], ["best", best]), go("play again"), snd],
+      paused: [kick(LEVELS[lvl].name), title("PAUSED"), sub("click the view to resume."), stats(["hp", hp], ["cells", ammo], ["bugs", bugsLeft()]), snd],
+    }[mode];
+    card.replaceChildren(...parts.filter(Boolean));
   }
   // n cycles: music + sfx → sfx only → silent → music + sfx
   function cycleSound() {
@@ -572,19 +614,26 @@ export function bughunt(root, { setMeta, log }) {
     }
     dirty = true;
   }
+  let hudKey = "", pipLvl = -1, prevHp = 100, prevScore = 0;
   function hudUpdate() {
-    const snd = soundtrack.muted ? (sfx.muted ? "off" : "sfx") : "on";
-    const cur = `${hp}|${ammo}|${bugsLeft()}|${score}|${lvl}|${snd}`;
-    if (hud.dataset.v === cur) return;
-    hud.dataset.v = cur;
-    const warn = (on) => (on ? "warn" : "");
-    hud.replaceChildren(
-      h("span", { className: warn(hp <= 30) }, "hp ", h("b", { textContent: hp })),
-      h("span", { className: warn(ammo <= 5) }, "cells ", h("b", { textContent: ammo })),
-      h("span", {}, "bugs ", h("b", { textContent: bugsLeft() })),
-      h("span", {}, "score ", h("b", { textContent: score })),
-      h("span", { className: "dim", textContent: `m map · n ♪ ${snd}` }),
-    );
+    const snd = sndState(), left = bugsLeft();
+    const cur = `${hp}|${ammo}|${left}|${score}|${lvl}|${snd}`;
+    if (hudKey === cur) return;
+    hudKey = cur;
+    sHp.v.textContent = hp; sHp.meter.style.setProperty("--v", hp / 100); sHp.n.classList.toggle("warn", hp <= 30);
+    if (hp < prevHp) replay(sHp.n, "hit");
+    sCells.v.textContent = ammo; sCells.meter.style.setProperty("--v", clamp(ammo / 30, 0, 1)); sCells.n.classList.toggle("warn", ammo <= 5);
+    if (pipLvl !== lvl) { // one pip per bug in the sector, emptied as they die
+      pipLvl = lvl;
+      sBugs.meter.replaceChildren(...ents.filter((e) => e.kind === "bug").map(() => h("i")));
+    }
+    [...sBugs.meter.children].forEach((pip, i) => pip.classList.toggle("off", i >= left));
+    sBugs.v.textContent = left; sBugs.n.classList.toggle("clear", !left);
+    sScore.v.textContent = score;
+    if (score > prevScore) replay(sScore.n, "bump");
+    prevHp = hp; prevScore = score;
+    footSector.textContent = LEVELS[lvl].name;
+    footSnd.textContent = `n ♪ ${snd}`;
     setMeta?.(`${LEVELS[lvl].name.split(" · ")[0]} · ${score}`);
   }
 
@@ -598,14 +647,16 @@ export function bughunt(root, { setMeta, log }) {
     if (dirty || state === "play") { render(); dirty = false; }
   }
   function resize() {
-    const bw = board.clientWidth, bh = board.clientHeight;
-    if (!bw || !bh) return;
+    // the screen gets whatever the board has left after the hud and footer rows
+    const bw = board.clientWidth, bh = board.clientHeight - (shell.offsetHeight - screen.offsetHeight);
+    if (!bw || bh <= 0) return;
     const aspect = clamp(bw / bh, 1.25, 2);
     W = 320; H = Math.round(W / aspect);
     if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; zbuf = new Float32Array(W); }
     let cw = bw, ch = bw / aspect;
     if (ch > bh) { ch = bh; cw = bh * aspect; }
-    canvas.style.width = `${Math.floor(cw)}px`; canvas.style.height = `${Math.floor(ch)}px`;
+    shell.style.width = `${Math.floor(cw)}px`;
+    screen.style.width = `${Math.floor(cw)}px`; screen.style.height = `${Math.floor(ch)}px`;
     ctx.imageSmoothingEnabled = false;
     dirty = true;
   }
@@ -644,6 +695,13 @@ export function bughunt(root, { setMeta, log }) {
     touch = null; touchMove = 0;
   });
   canvas.addEventListener("pointercancel", () => { touch = null; touchMove = 0; });
+  // the card covers the view: a click anywhere on it (or its button, from the keyboard) starts / resumes
+  veil.addEventListener("click", () => {
+    canvas.focus();
+    if (state !== "play") start();
+    dirty = true;
+    if (matchMedia("(pointer: fine)").matches) canvas.requestPointerLock?.()?.catch?.(() => {});
+  });
   addEventListener("keydown", onKey);
   addEventListener("keyup", onKeyUp);
   document.addEventListener("mousemove", onMouse);
