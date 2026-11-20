@@ -720,6 +720,110 @@ body.motion-reduced .snap-ghost { transition: opacity .12s ease-out; }
 .game__hud .warn, .game__hud .warn b { color: var(--red); }
 @media (prefers-reduced-motion: no-preference) { .game__hud .warn b { animation: hud-warn 0.9s ease-in-out infinite alternate; } }
 @keyframes hud-warn { from { opacity: 1; } to { opacity: 0.45; } }
+
+/* bughunt.exe: DOM layers over the raycaster (hud · banner · toast · card) */
+.bh { display: flex; flex-direction: column; gap: 8px; max-width: 100%; container: bhw / inline-size; }
+@container bhw (max-width: 440px) { .bh-hud { grid-template-columns: 1fr 1fr auto auto; gap: 10px; } .bh-v { gap: 6px; } }
+.bh-hud { display: grid; grid-template-columns: 1.35fr 1.15fr 1fr auto; gap: 14px; align-items: end; }
+.bh-stat { display: grid; gap: 4px; min-width: 0; }
+.bh-k { font-size: 9px; line-height: 1; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); }
+.bh-v { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bh-v b { font-weight: 400; color: var(--text); font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; line-height: 1; transition: color 0.2s; }
+.bh-meter { position: relative; flex: 1; min-width: 24px; height: 6px; overflow: hidden; background: color-mix(in srgb, var(--line) 80%, transparent); }
+.bh-meter::before { content: ""; position: absolute; inset: 0; transform-origin: left; transform: scaleX(var(--v, 1)); background: var(--lime); box-shadow: var(--glow); transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s; }
+.bh-meter::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), var(--win) calc(10% - 1px) 10%); }
+.bh-cells .bh-meter::before { background: var(--amber); }
+.bh-stat.warn .bh-meter::before { background: var(--red); }
+.bh-stat.warn b { color: var(--red); }
+.bh-bugs .bh-meter { display: flex; flex: none; min-width: 0; gap: 3px; height: 8px; background: none; overflow: visible; }
+.bh-bugs b { text-align: left; }
+.bh-bugs .bh-meter::before, .bh-bugs .bh-meter::after { content: none; }
+.bh-bugs .bh-meter i { flex: none; width: 8px; height: 8px; background: var(--red); transition: background-color 0.25s, box-shadow 0.25s, transform 0.25s; }
+.bh-bugs .bh-meter i.off { background: transparent; box-shadow: inset 0 0 0 1px var(--line-hi); transform: scaleY(0.6); }
+.bh-bugs.clear b { color: var(--lime); }
+.bh-score .bh-meter { display: none; }
+.bh-score b { color: var(--lime); font-size: 14px; text-shadow: var(--glow); }
+@media (prefers-reduced-motion: no-preference) {
+  .bh-stat.warn b { animation: hud-warn 0.9s ease-in-out infinite alternate; }
+  .bh-hp.hit .bh-meter { animation: bh-hit 0.35s ease-out; }
+  .bh-score.bump b { animation: bh-bump 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); }
+}
+@keyframes bh-hit { 0% { background: var(--red); } 100% { background: color-mix(in srgb, var(--line) 80%, transparent); } }
+@keyframes bh-bump { 0% { transform: translateY(0); } 35% { transform: translateY(-3px); color: var(--text); } 100% { transform: translateY(0); } }
+
+.bh-screen { position: relative; container: bh / size; border: 1px solid var(--line); background: var(--bg); overflow: hidden; transition: border-color 0.2s; }
+.bh-screen:has(canvas:focus-visible) { border-color: var(--lime); }
+.game .bh-screen canvas { width: 100%; height: 100%; border: 0; }
+/* hud corner brackets framing the view */
+.bh-screen::after { content: ""; position: absolute; inset: 6px; pointer-events: none; opacity: 0.55;
+  --c: var(--lime);
+  background:
+    linear-gradient(var(--c), var(--c)) top left / 10px 1px, linear-gradient(var(--c), var(--c)) top left / 1px 10px,
+    linear-gradient(var(--c), var(--c)) top right / 10px 1px, linear-gradient(var(--c), var(--c)) top right / 1px 10px,
+    linear-gradient(var(--c), var(--c)) bottom left / 10px 1px, linear-gradient(var(--c), var(--c)) bottom left / 1px 10px,
+    linear-gradient(var(--c), var(--c)) bottom right / 10px 1px, linear-gradient(var(--c), var(--c)) bottom right / 1px 10px;
+  background-repeat: no-repeat; }
+.bh[data-mode="dead"] .bh-screen::after { --c: var(--red); }
+
+.bh-banner { position: absolute; inset: 16% 0 auto; text-align: center; pointer-events: none; opacity: 0; line-height: 1.1; }
+.bh-banner span { display: block; font-size: 9px; letter-spacing: 0.32em; text-transform: uppercase; color: var(--muted); }
+.bh-banner b { display: block; margin-top: 4px; font-family: var(--f-dot); font-weight: 800; font-size: clamp(20px, 9cqi, 44px); color: var(--lime); text-shadow: var(--glow-big); }
+.bh-banner.on { animation: bh-banner 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes bh-banner { 0% { opacity: 0; transform: translateY(8px); letter-spacing: 0.2em; } 14% { opacity: 1; transform: none; letter-spacing: 0.04em; } 72% { opacity: 1; } 100% { opacity: 0; transform: translateY(-4px); } }
+
+.bh-toast { position: absolute; top: 10px; left: 50%; max-width: calc(100% - 40px); margin: 0; padding: 4px 10px; transform: translateX(-50%); font-size: 10px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text); background: color-mix(in srgb, var(--bg) 80%, transparent); border: 1px solid var(--line-hi); border-left: 2px solid var(--lime); opacity: 0; pointer-events: none; }
+.bh-toast.on { animation: bh-toast 3s ease both; }
+@keyframes bh-toast { 0% { opacity: 0; transform: translate(-50%, -4px); } 8%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, 0); } }
+@media (prefers-reduced-motion: reduce) {
+  .bh-banner.on { animation-name: bh-fade; }
+  .bh-toast.on { animation-name: bh-fade-x; }
+  .bh-meter::before, .bh-bugs .bh-meter i { transition: none; }
+}
+@keyframes bh-fade { 0%, 100% { opacity: 0; } 10%, 75% { opacity: 1; } }
+@keyframes bh-fade-x { 0%, 100% { opacity: 0; transform: translateX(-50%); } 6%, 80% { opacity: 1; transform: translateX(-50%); } }
+
+.bh-veil { position: absolute; inset: 0; display: grid; place-items: center; padding: 14px; overflow: auto; cursor: pointer; line-height: 1.5; z-index: 1;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 2px, color-mix(in srgb, var(--bg) 35%, transparent) 2px 3px),
+    radial-gradient(ellipse at center, color-mix(in srgb, var(--bg) 60%, transparent), color-mix(in srgb, var(--bg) 92%, transparent));
+  backdrop-filter: blur(1.5px); }
+.bh-veil[hidden] { display: none; }
+.bh-card { display: grid; justify-items: center; gap: 10px; max-width: 360px; text-align: center; }
+.bh-kick { margin: 0; font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--muted); }
+.bh-title { margin: 0; font-family: var(--f-dot); font-weight: 800; font-size: clamp(30px, 13cqi, 64px); line-height: 0.9; letter-spacing: 0.03em; color: var(--lime); text-shadow: var(--glow-big); }
+.bh-title small { margin-left: 0.25em; font-family: var(--f-ui); font-size: 0.26em; font-weight: 400; letter-spacing: 0.08em; color: var(--muted); text-shadow: none; }
+.bh[data-mode="dead"] .bh-title { color: var(--red); text-shadow: 0 0 18px color-mix(in srgb, var(--red) 45%, transparent); }
+.bh[data-mode="paused"] .bh-title { font-size: clamp(24px, 9cqi, 44px); }
+.bh-sub { margin: 0; max-width: 32ch; font-size: 11px; color: var(--text); }
+.bh-stats { display: flex; gap: 18px; }
+.bh-stats span { display: grid; gap: 2px; }
+.bh-stats small { font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); }
+.bh-stats b { font-weight: 400; font-size: 15px; color: var(--text); font-variant-numeric: tabular-nums; }
+.bh-badge { margin: 0; padding: 1px 8px; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--amber); border: 1px solid var(--amber); }
+.bh-go { display: inline-flex; align-items: center; gap: 10px; padding: 7px 16px; font: inherit; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer;
+  color: var(--lime-ink, var(--bg)); background: var(--lime); border: 0; box-shadow: var(--glow); transition: transform 0.15s, filter 0.15s; }
+.bh-go kbd { font: inherit; font-size: 9px; padding: 0 4px; border: 1px solid currentColor; opacity: 0.7; }
+.bh-go:hover { filter: brightness(1.12); }
+.bh-go:active { transform: translateY(1px); }
+.bh-go:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+.bh[data-mode="dead"] .bh-go { background: var(--red); color: var(--bg); }
+@media (prefers-reduced-motion: no-preference) {
+  .bh[data-mode="title"] .bh-go { animation: bh-breathe 2.2s ease-in-out infinite; }
+}
+@keyframes bh-breathe { 50% { box-shadow: var(--glow-big); } }
+.bh-keys { display: grid; grid-template-columns: repeat(3, max-content max-content); gap: 5px 8px; align-items: center; margin: 0; font-size: 10px; text-align: left; }
+.bh-keys dt { display: flex; gap: 3px; justify-content: flex-end; }
+.bh-keys dd { margin: 0 6px 0 0; color: var(--muted); }
+.bh-keys kbd, .bh-hint kbd { font: inherit; font-size: 9px; line-height: 1.5; padding: 0 4px; color: var(--text); border: 1px solid var(--line-hi); border-bottom-width: 2px; background: color-mix(in srgb, var(--win) 70%, transparent); }
+.bh-snd { margin: 0; font-size: 9px; color: var(--dim); }
+@container bh (max-width: 380px) { .bh-keys { grid-template-columns: repeat(2, max-content max-content); } }
+@container bh (max-height: 290px) { .bh-keys, .bh-kick { display: none; } .bh-card { gap: 8px; } }
+@container bh (max-height: 200px) { .bh-sub, .bh-snd { display: none; } }
+
+.bh-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 10px; color: var(--dim); }
+.bh-sector { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bh-hint { display: flex; align-items: center; gap: 5px; flex: none; }
 .typer__text { font-size: 15px; line-height: 1.7; color: var(--dim); }
 .typer__text .ok { color: var(--text); }
 .typer__text .bad { color: var(--lime-ink); background: var(--red); }

@@ -8,6 +8,8 @@
 //           play a genre per sector and nudges the density / dark knobs with the
 //           fight. It only takes the engine when the engine is idle, so a mix the
 //           user already has running is never replaced, and gives it back on exit.
+//           While it holds the engine it solos the music source, so ambient
+//           layers saved in noise.app never bleed in under the fight.
 import { store } from "./data.js";
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -319,6 +321,9 @@ export const score = {
       // somebody else's mix is playing: leave it alone, the game just plays over it
       if (!owned && engine.state !== "idle" && engine.state !== "error") return;
       owned = true;
+      // the user's saved noise.app layers (rain, hiss, tones) stay selected but
+      // silent: only the game's score plays while the game holds the engine
+      engine.solo("music");
       lastKnob = { density: -1, dark: -1 };
       const p = music.play(s.genre);
       knob("dark", s.dark);
@@ -349,6 +354,7 @@ export const score = {
       if (want || !owned) return;
       owned = false;
       if (!music.genre && engine.state !== "idle") engine.stop();
+      engine.solo(null);
     }, (fade + 0.3) * 1000);
   },
 };

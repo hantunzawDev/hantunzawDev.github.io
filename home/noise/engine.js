@@ -21,7 +21,9 @@ let epoch = 0;               // bumps on stop/restart so stale async work bows o
 let loadingP = null;
 let suspendTimer = 0, sleepTimers = [], sleepEnd = 0;
 let ownsNoise = false, holding = false, claimToken = 0;
-const sources = new Map();   // name → { start, stop, node, init, load, started }
+const sources = new Map();   // name → { name, start, stop, node, init, load, started }
+let soloName = null;         // while set, only this source may sound (a game borrowing the engine)
+const allowed = (rec) => !soloName || rec.name === soloName;
 const listeners = new Set();
 
 export const engine = {
@@ -32,7 +34,7 @@ export const engine = {
   get error() { return error; },
   play, pause, stop, setVol, sleep, sleepLeft,
   onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
-  attachSource, detachSource,
+  attachSource, detachSource, solo,
 };
 
 function emit() {
@@ -83,20 +85,37 @@ function wire(src) {
 // is called once the context exists, for sources that build their own nodes.
 function attachSource(name, src) {
   detachSource(name);
-  const rec = { ...src, wired: false, started: false };
+  const rec = { ...src, name, wired: false, started: false };
   sources.set(name, rec);
   wire(rec);
-  if (state === "playing" || state === "paused" || state === "fading") {
-    if (!rec.load) startSource(rec);
-    else Promise.resolve().then(() => rec.load()).then(() => {
-      if (sources.get(name) === rec && (state === "playing" || state === "paused" || state === "fading")) startSource(rec);
-    }, (e) => {
-      if (sources.get(name) !== rec) return;
-      error = e?.message || String(e); // FAIL is only legal from loading; surface it without dropping playback
-      dispatch("FAIL"); emit();
-    });
-  }
+  startLive(rec);
   return () => { if (sources.get(name) === rec) detachSource(name); };
+}
+
+const isLive = () => state === "playing" || state === "paused" || state === "fading";
+
+// start a source joining playback that is already under way (load first if it has one)
+function startLive(rec) {
+  if (!isLive() || !allowed(rec)) return;
+  if (!rec.load) return startSource(rec);
+  Promise.resolve().then(() => rec.load()).then(() => {
+    if (sources.get(rec.name) === rec && isLive()) startSource(rec);
+  }, (e) => {
+    if (sources.get(rec.name) !== rec) return;
+    error = e?.message || String(e); // FAIL is only legal from loading; surface it without dropping playback
+    dispatch("FAIL"); emit();
+  });
+}
+
+// Let only `name` sound (null lifts it). The user's other sources (saved layers,
+// radio) keep their selection; they are just held silent until the solo ends.
+function solo(name = null) {
+  if (soloName === name) return;
+  soloName = name;
+  for (const rec of sources.values()) {
+    if (!allowed(rec)) stopSource(rec);
+    else if (!rec.started) startLive(rec);
+  }
 }
 
 function detachSource(name) {
@@ -108,7 +127,7 @@ function detachSource(name) {
 }
 
 function startSource(rec) {
-  if (rec.started) return;
+  if (rec.started || !allowed(rec)) return;
   rec.started = true;
   try { rec.start?.(); } catch (e) { console.error("noise source start failed", e); }
 }
@@ -171,11 +190,11 @@ function begin() {
     }
     // Settle each source's load on its own: one failing (music offline) must not
     // silence the others. FAIL only when nothing that loaded is left to play.
-    const recs = [...sources.values()];
+    const recs = [...sources.values()].filter(allowed);
     const res = await Promise.allSettled(recs.map((s) => Promise.resolve().then(() => s.load?.())));
     if (mine !== epoch || state !== "loading") return;
     const failed = new Set(recs.filter((_, i) => res[i].status === "rejected"));
-    const ok = [...sources.values()].filter((s) => !failed.has(s));
+    const ok = [...sources.values()].filter((s) => allowed(s) && !failed.has(s));
     if (failed.size) {
       const bad = res.find((r) => r.status === "rejected").reason;
       error = bad?.message || String(bad);

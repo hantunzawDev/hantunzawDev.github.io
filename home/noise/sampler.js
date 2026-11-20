@@ -91,6 +91,7 @@ export function createSampler({
   const wanted = new Map();   // id → vol
   const live = new Map();     // id → instance
   const fading = new Map();   // id → instance fading out, awaiting disposal
+  let on = false;             // the engine has started this source
   const failed = new Set();   // ids whose load failed (cleared by off / a fresh set)
   let cache = new Map(), cacheCtx = null; // src → { p, buf, bytes }
 
@@ -323,7 +324,7 @@ export function createSampler({
 
   // bring `live` in line with `wanted`
   function sync() {
-    if (!ctx || !bus || !isActive()) return;
+    if (!ctx || !bus || !on || !isActive()) return;
     for (const [id, vol] of wanted) {
       if (failed.has(id)) continue;
       const inst = live.get(id);
@@ -386,10 +387,12 @@ export function createSampler({
 
   const source = {
     init(c, mix) { ctx = c; bus = c.createGain(); bus.gain.value = 1; bus.connect(mix); },
-    start() { sync(); },
+    // the engine starts / stops the source; a selection made while it is held
+    // stopped (another source soloed) is kept but does not sound
+    start() { on = true; sync(); },
     // only selected layers that have not failed can sound
     has() { for (const id of wanted.keys()) if (!failed.has(id)) return true; return false; },
-    stop() { teardown(); },
+    stop() { on = false; teardown(); },
   };
 
   return {
